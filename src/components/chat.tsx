@@ -4,32 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Avatar } from '@/components/ui/avatar';
 import { Separator } from '@/components/ui/separator';
 import { Ionicons } from '@expo/vector-icons';
-import * as FileSystem from 'expo-file-system';
-
-// Platform-specific imports
-let initLlama: any = null;
-let RNFS: any = null;
-
-console.log('Platform.OS:', Platform.OS); // Debug platform detection
-
-if (Platform.OS !== 'web') {
-  try {
-    const llamaModule = require('llama.rn');
-    initLlama = llamaModule.initLlama;
-    console.log('llama.rn loaded successfully');
-  } catch (error) {
-    console.log('llama.rn not available:', error);
-  }
-  
-  try {
-    RNFS = require('react-native-fs');
-    console.log('react-native-fs loaded successfully');
-  } catch (error) {
-    console.log('react-native-fs not available, using expo-file-system');
-  }
-} else {
-  console.log('Running on web platform, skipping native modules');
-}
+import { createAIService, AIService } from '@/lib/ai-service';
 
 interface Message {
   id: string;
@@ -40,9 +15,6 @@ interface Message {
 
 interface ChatProps {}
 
-const GEMMA_MODEL_URL = 'https://huggingface.co/ggml-org/gemma-3n-E2B-it-GGUF/resolve/main/gemma-3n-E2B-it-Q8_0.gguf';
-const MODEL_FILENAME = 'gemma-3n-E2B-it-Q8_0.gguf';
-
 export default function Chat({}: ChatProps) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputText, setInputText] = useState('');
@@ -51,151 +23,88 @@ export default function Chat({}: ChatProps) {
   const [downloadProgress, setDownloadProgress] = useState(0);
   const [isDownloading, setIsDownloading] = useState(false);
   const [isInitializing, setIsInitializing] = useState(false);
-  const [llamaContext, setLlamaContext] = useState<any>(null);
+  const [aiService, setAIService] = useState<AIService | null>(null);
   const scrollViewRef = useRef<ScrollView>(null);
 
   useEffect(() => {
-    initializeModel();
+    initializeAI();
+    
+    // Cleanup on unmount
+    return () => {
+      if (aiService) {
+        aiService.cleanup();
+      }
+    };
   }, []);
 
-  const downloadModel = async (modelPath: string): Promise<void> => {
-    try {
-      setIsDownloading(true);
-      setDownloadProgress(0);
-      
-      console.log('Starting model download...');
-      console.log('From:', GEMMA_MODEL_URL);
-      console.log('To:', modelPath);
-      
-      if (RNFS) {
-        // Use react-native-fs for native platforms
-        const downloadResult = await RNFS.downloadFile({
-          fromUrl: GEMMA_MODEL_URL,
-          toFile: modelPath,
-          progress: (res: any) => {
-            const progress = (res.bytesWritten / res.contentLength) * 100;
-            setDownloadProgress(Math.round(progress));
-            console.log(`Download progress: ${Math.round(progress)}%`);
-          },
-          progressInterval: 1000,
-        }).promise;
+  // Monitor download progress for native platforms
+  useEffect(() => {
+    if (!aiService || Platform.OS === 'web') return;
 
-        if (downloadResult.statusCode === 200) {
-          console.log('Model downloaded successfully');
-          setIsDownloading(false);
-          return;
-        } else {
-          throw new Error(`Download failed with status code: ${downloadResult.statusCode}`);
-        }
-      } else {
-        // Fallback to expo-file-system
-        const downloadResumable = FileSystem.createDownloadResumable(
-          GEMMA_MODEL_URL,
-          modelPath,
-          {},
-          (downloadProgress) => {
-            const progress = downloadProgress.totalBytesWritten / downloadProgress.totalBytesExpectedToWrite;
-            setDownloadProgress(Math.round(progress * 100));
-          }
-        );
-
-        const result = await downloadResumable.downloadAsync();
-        if (result) {
-          console.log('Model downloaded successfully');
-          setIsDownloading(false);
-          return;
-        }
-        throw new Error('Download failed');
-      }
-    } catch (error) {
-      console.error('Error downloading model:', error);
-      setIsDownloading(false);
-      Alert.alert(
-        'Download Failed',
-        'Failed to download the model. Please check your internet connection and try again.',
-        [
-          {
-            text: 'Retry',
-            onPress: () => downloadModel(modelPath),
-          },
-          { text: 'Cancel' },
-        ]
-      );
-      throw error;
-    }
-  };
-
-  const initializeModel = async (): Promise<void> => {
-    try {
-      console.log('Initializing model, Platform.OS:', Platform.OS, 'initLlama available:', !!initLlama);
-      
-      // Check if llama.rn is available (not on web)
-      if (!initLlama) {
-        console.log('llama.rn not available, using mock responses');
-        setIsModelReady(true);
+    const checkProgress = async () => {
+      if (typeof (aiService as any).getDownloadProgress === 'function' && 
+          typeof (aiService as any).isDownloadingModel === 'function') {
+        const downloading = await (aiService as any).isDownloadingModel();
+        setIsDownloading(downloading);
         
-        // Add welcome message based on platform
-        const welcomeMessage: Message = {
-          id: Date.now().toString(),
-          role: 'assistant',
-          content: Platform.OS === 'web' 
-            ? 'Hello! I\'m running in web mode. The full AI functionality requires a native mobile app. However, you can still test the chat interface!'
-            : `Hello! I'm running on ${Platform.OS} but llama.rn is not available. This might be a configuration issue. Please check the installation.`,
-          timestamp: new Date(),
-        };
-        setMessages([welcomeMessage]);
-        return;
+        if (downloading) {
+          const progress = await (aiService as any).getDownloadProgress();
+          setDownloadProgress(progress);
+        }
       }
+    };
 
+    const interval = setInterval(checkProgress, 500);
+    return () => clearInterval(interval);
+  }, [aiService]);
+
+  const initializeAI = async (): Promise<void> => {
+    try {
       setIsInitializing(true);
+      console.log('Initializing AI service for platform:', Platform.OS);
       
-      // Use the appropriate document directory
-      const documentDir = RNFS ? RNFS.DocumentDirectoryPath : FileSystem.documentDirectory;
-      const modelPath = RNFS 
-        ? `${documentDir}/gemma-3n-E2B-it-Q8_0.gguf`
-        : `${documentDir}gemma-3n-E2B-it-Q8_0.gguf`;
+      // Create the appropriate AI service
+      const service = await createAIService();
+      setAIService(service);
       
-      console.log('Model path:', modelPath);
-
-      // Use the appropriate file system to check model existence
-      let modelExists = false;
-      if (RNFS) {
-        modelExists = await RNFS.exists(modelPath);
-      } else {
-        const fileInfo = await FileSystem.getInfoAsync(modelPath);
-        modelExists = fileInfo.exists;
+      // For native platforms, check if model needs downloading
+      if (Platform.OS !== 'web' && typeof (service as any).isDownloadingModel === 'function') {
+        const downloading = await (service as any).isDownloadingModel();
+        setIsDownloading(downloading);
       }
       
-      if (!modelExists) {
-        console.log('Model not found, downloading...');
-        await downloadModel(modelPath);
-      } else {
-        console.log('Model already exists');
-      }
-
-      console.log('Initializing Llama context...');
-      const context = await initLlama({
-        model: modelPath,
-        use_mlock: true,
-        n_ctx: 2048,
-        n_gpu_layers: 99, // Use GPU acceleration
-      });
-
-      setLlamaContext(context);
+      // Initialize the service
+      await service.initialize();
+      
       setIsModelReady(true);
-      console.log('Model initialized successfully');
+      setIsDownloading(false);
+      console.log('AI service initialized successfully');
 
-      // Add welcome message
+      // Add welcome message based on platform
       const welcomeMessage: Message = {
         id: Date.now().toString(),
         role: 'assistant',
-        content: `Hello! I'm Gemma 3n, your AI assistant running natively on ${Platform.OS}. How can I help you today?`,
+        content: Platform.OS === 'web' 
+          ? 'Hello! I\'m Gemma 3n running with Transformers.js in your browser. How can I help you today?'
+          : `Hello! I'm Gemma 3n, your AI assistant running natively on ${Platform.OS}. How can I help you today?`,
         timestamp: new Date(),
       };
       setMessages([welcomeMessage]);
     } catch (error) {
-      console.error('Error initializing model:', error);
-      Alert.alert('Initialization Error', 'Failed to initialize the AI model. Please restart the app.');
+      console.error('Error initializing AI service:', error);
+      
+      // Fallback to mock mode
+      setIsModelReady(true);
+      setIsDownloading(false);
+      const errorMessage: Message = {
+        id: Date.now().toString(),
+        role: 'assistant',
+        content: Platform.OS === 'web' 
+          ? 'Hello! I\'m running in demo mode. The AI model failed to load, but you can still test the chat interface!'
+          : 'Hello! I\'m running in demo mode. There was an issue loading the AI model. You can still test the interface, but responses will be simulated.',
+        timestamp: new Date(),
+      };
+      setMessages([errorMessage]);
     } finally {
       setIsInitializing(false);
     }
@@ -218,94 +127,60 @@ export default function Chat({}: ChatProps) {
     try {
       let responseText: string;
 
-      // Check if we're running with actual llama.rn or in web mode
-      if (!initLlama || !llamaContext) {
-        // Mock response for web
+      // Check if we have an AI service available
+      if (!aiService || !aiService.isReady()) {
+        // Mock response for demo mode
         await new Promise(resolve => setTimeout(resolve, 1000)); // Simulate processing time
         
         const mockResponses = [
-          "I'm running in web preview mode. For full AI functionality, please use the mobile app!",
-          "This is a demo response. The actual AI model runs on mobile devices.",
-          "Thanks for testing the interface! The real Gemma 3n model would provide more intelligent responses.",
-          "In mobile mode, I would use the actual Gemma 3n model to generate responses.",
-          "This chat interface is working! On mobile, you'd get real AI responses."
+          "I'm running in demo mode. For full AI functionality, the model needs to be properly loaded!",
+          "This is a demo response. The actual AI model would provide more intelligent responses.",
+          "Thanks for testing the interface! In full mode, I'd use the Gemma 3n model.",
+          "Demo mode is active. The real AI would analyze your message and respond appropriately.",
+          "This chat interface is working! With the AI model loaded, you'd get real responses."
         ];
         
         responseText = mockResponses[Math.floor(Math.random() * mockResponses.length)];
       } else {
-        // Real AI response - Gemma-specific configuration
-        const stopWords = [
-          '<end_of_turn>',
-          '<|end_of_turn|>',
-          '</s>',
-          '<eos>',
-          '<|endoftext|>',
-          '<|end|>',
-          '<|eot_id|>',
-          '<|end_of_text|>',
-          '<|im_end|>',
-          '<|EOT|>',
-          '<|END_OF_TURN_TOKEN|>',
-          '\n\n\n',
-          'Human:',
-          'User:'
-        ];
-        
-        const result = await llamaContext.completion(
-          {
-            messages: [
-              {
-                role: 'system',
-                content: 'You are Gemma, a helpful and friendly AI assistant. Respond in a conversational and helpful manner. Always end your responses naturally without repeating end tokens.',
-              },
-              ...messages.map(msg => ({
-                role: msg.role,
-                content: msg.content,
-              })),
-              {
-                role: 'user',
-                content: userMessage.content,
-              },
-            ],
-            n_predict: 150, // Reduced to prevent runaway generation
-            stop: stopWords,
-            temperature: 0.6, // Slightly lower temperature for more controlled output
-            top_p: 0.9,
-            repeat_penalty: 1.1, // Prevent repetition
-            frequency_penalty: 0.1,
+        // Real AI response using the modular service
+        const result = await aiService.complete({
+          messages: [
+            ...messages.map(msg => ({
+              role: msg.role as 'user' | 'assistant' | 'system',
+              content: msg.content,
+            })),
+            {
+              role: 'user',
+              content: userMessage.content,
+            },
+          ],
+          maxTokens: 150,
+          temperature: 0.6,
+          topP: 0.9,
+          stopWords: [
+            '<end_of_turn>',
+            '<|end_of_turn|>',
+            '</s>',
+            '<eos>',
+            '<|endoftext|>',
+            '<|end|>',
+            '<|eot_id|>',
+            '<|end_of_text|>',
+            '<|im_end|>',
+            '<|EOT|>',
+            '<|END_OF_TURN_TOKEN|>',
+            '\n\n\n',
+            'Human:',
+            'User:'
+          ],
+          onToken: (token) => {
+            console.log('Partial token:', token);
           },
-          (data) => {
-            // Partial completion callback - could be used for streaming
-            console.log('Partial token:', data.token);
-          }
-        );
+        });
 
-        responseText = result.text.trim();
+        responseText = result.text;
         
-        // Post-process to remove any remaining end tokens that might have slipped through
-        const endTokensToRemove = [
-          '<end_of_turn>',
-          '<|end_of_turn|>',
-          '</s>',
-          '<eos>',
-          '<|endoftext|>',
-          '<|end|>',
-          '<|eot_id|>',
-          '<|end_of_text|>',
-          '<|im_end|>',
-          '<|EOT|>',
-          '<|END_OF_TURN_TOKEN|>'
-        ];
-        
-        // Remove any end tokens from the response
-        for (const token of endTokensToRemove) {
-          responseText = responseText.replace(new RegExp(token.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi'), '');
-        }
-        
-        // Remove excessive whitespace and newlines
-        responseText = responseText.replace(/\n{3,}/g, '\n\n').trim();
-        
-        // If the response is empty or only contains end tokens, provide a fallback
+        // Additional fallback if response is empty
         if (!responseText || responseText.length < 3) {
           responseText = "I apologize, but I'm having trouble generating a proper response. Could you please rephrase your question?";
         }

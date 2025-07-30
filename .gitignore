@@ -37,3 +37,4 @@ yarn-error.*
 
 app-example
 .claude
+model_cache
