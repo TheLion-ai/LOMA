@@ -8,9 +8,12 @@
       "favicon": "./assets/favicon.png"
     },
     "plugins": [
-      "expo-router"
+      ["expo-router", { "origin": "http://localhost:8085" }]
     ],
     "name": "loma",
-    "slug": "loma"
+    "slug": "loma",
+    "ios": {
+      "bundleIdentifier": "com.anonymous.loma"
+    }
   }
 }

@@ -1,32 +1,72 @@
-# Expo Router and shadcn
+# Gemma 3n Chat App
 
-Use [Expo Router](https://docs.expo.dev/router/introduction/) with [Shadcn](https://ui.shadcn.com/) styling on web (Shadcn does not support native).
+A React Native chat application powered by Gemma 3n language model using llama.rn.
 
-This template uses Postcss, autoprefixer, and tailwindcss to style the web version of the app. The project is configured to use a root `/src` directory for all source files.
+## Features
 
-New shadcn components can be added [according to the docs](https://ui.shadcn.com/docs/components/accordion), i.e. by running the CLI: `npx shadcn@latest add accordion`
+- **Local AI Chat**: Chat with Gemma 3n AI model running locally on your device
+- **Automatic Model Download**: The app automatically downloads the Gemma 3n model (4.79GB) on first launch
+- **Modern UI**: Clean and intuitive chat interface built with shadcn/ui components
+- **Cross-Platform**: Works on iOS, Android, and Web
 
-## 🚀 How to use
+## Getting Started
 
-Start an Expo app with this template:
+### Prerequisites
 
-```sh
-npx create-expo-app -e with-shadcn
-```
+- Node.js (v16 or later)
+- Expo CLI
+- iOS Simulator (for iOS development)
+- Android Studio (for Android development)
 
-Or run in the browser with Stackblitz:
+### Installation
 
-<a href="https://stackblitz.com/github/expo/examples/tree/master/with-shadcn">
-  <img alt="Open in Stackblitz" longdesc="Open in Stackblitz" src="https://img.shields.io/badge/Open%20in%20Stackblitz-000.svg?style=flat-square&logo=STACKBLITZ&labelColor=000000&logoColor=fff" />
-</a>
+1. Clone the repository
+2. Install dependencies:
+   ```bash
+   npm install
+   ```
 
-## Deploy
+3. Start the development server:
+   ```bash
+   npm start
+   ```
 
-Deploy on all platforms with Expo Application Services (EAS).
+4. Choose your platform:
+   - Press `i` for iOS simulator
+   - Press `a` for Android emulator
+   - Press `w` for web browser
 
-- Deploy the website: `npx eas-cli deploy` — [Learn more](https://docs.expo.dev/eas/hosting/get-started/)
-- Deploy on iOS and Android using: `npx eas-cli build` — [Learn more](https://expo.dev/eas)
+### First Launch
 
-<!-- <a href="https://expo.dev/eas">
-  <img alt="Deploy with EAS" longdesc="Deploy with EAS" src="https://img.shields.io/badge/Deploy%20with%20EAS-000.svg?style=for-the-badge&logo=EXPO&labelColor=000000&logoColor=fff" />
-</a> -->
+On the first launch, the app will:
+1. Download the Gemma 3n model (~4.79GB) - this may take several minutes
+2. Initialize the AI model
+3. Present you with a chat interface
+
+## Technology Stack
+
+- **React Native**: Cross-platform mobile development
+- **Expo**: Development platform and tools
+- **llama.rn**: React Native binding for llama.cpp
+- **Gemma 3n**: Google's lightweight language model
+- **shadcn/ui**: Modern UI components
+- **TypeScript**: Type-safe development
+
+## Model Information
+
+This app uses the Gemma 3n E2B model in GGUF format:
+- **Model**: gemma-3n-E2B-it-Q8_0.gguf
+- **Size**: ~4.79GB
+- **Source**: Hugging Face (ggml-org/gemma-3n-E2B-it-GGUF)
+- **Quantization**: Q8_0 (8-bit quantization for good performance/quality balance)
+
+## Performance Notes
+
+- The model runs entirely on-device for privacy
+- Initial model loading may take 30-60 seconds
+- Response generation typically takes 5-15 seconds depending on device capabilities
+- GPU acceleration is available on supported devices
+
+## License
+
+This project is licensed under the MIT License.

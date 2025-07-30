@@ -2,21 +2,17 @@ import "@/global.css";
 import { Slot } from "expo-router";
 import Head from "expo-router/head";
 
-import { TooltipProvider } from "@/components/ui/tooltip";
-
 export default function Layout() {
   return (
     <>
       <Head>
-        <title>Dashboard | Expo App</title>
+        <title>Gemma 3n Chat | AI Assistant</title>
         <meta
           name="description"
-          content="High-performance dashboard built with Expo Router"
+          content="Local AI chat app powered by Gemma 3n language model"
         />
       </Head>
-      <TooltipProvider>
-        <Slot />
-      </TooltipProvider>
+      <Slot />
     </>
   );
 }

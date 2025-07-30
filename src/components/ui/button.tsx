@@ -1,56 +1,143 @@
 import * as React from "react"
-import { Slot } from "@radix-ui/react-slot"
-import { cva, type VariantProps } from "class-variance-authority"
+import { TouchableOpacity, Text, StyleSheet, ViewStyle, TextStyle } from "react-native"
 
-import { cn } from "@/lib/utils"
+type ButtonVariant = "default" | "destructive" | "outline" | "secondary" | "ghost" | "link"
+type ButtonSize = "default" | "sm" | "lg" | "icon"
 
-const buttonVariants = cva(
-  "inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50",
-  {
-    variants: {
-      variant: {
-        default: "bg-primary text-primary-foreground hover:bg-primary/90",
-        destructive:
-          "bg-destructive text-destructive-foreground hover:bg-destructive/90",
-        outline:
-          "border border-input bg-background hover:bg-accent hover:text-accent-foreground",
-        secondary:
-          "bg-secondary text-secondary-foreground hover:bg-secondary/80",
-        ghost: "hover:bg-accent hover:text-accent-foreground",
-        link: "text-primary underline-offset-4 hover:underline",
-      },
-      size: {
-        default: "h-10 px-4 py-2",
-        sm: "h-9 rounded-md px-3",
-        lg: "h-11 rounded-md px-8",
-        icon: "h-10 w-10",
-      },
-    },
-    defaultVariants: {
-      variant: "default",
-      size: "default",
-    },
-  }
-)
-
-export interface ButtonProps
-  extends React.ButtonHTMLAttributes<HTMLButtonElement>,
-    VariantProps<typeof buttonVariants> {
-  asChild?: boolean
+export interface ButtonProps {
+  variant?: ButtonVariant
+  size?: ButtonSize
+  disabled?: boolean
+  onPress?: () => void
+  children?: React.ReactNode
+  style?: ViewStyle
+  textStyle?: TextStyle
 }
 
-const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
-  ({ className, variant, size, asChild = false, ...props }, ref) => {
-    const Comp = asChild ? Slot : "button"
+const Button = React.forwardRef<TouchableOpacity, ButtonProps>(
+  ({ variant = "default", size = "default", disabled = false, onPress, children, style, textStyle, ...props }, ref) => {
+    const buttonStyle = [
+      styles.base,
+      styles[`variant_${variant}`],
+      styles[`size_${size}`],
+      disabled && styles.disabled,
+      style,
+    ]
+
+    const textStyles = [
+      styles.text,
+      styles[`text_${variant}`],
+      styles[`textSize_${size}`],
+      disabled && styles.textDisabled,
+      textStyle,
+    ]
+
     return (
-      <Comp
-        className={cn(buttonVariants({ variant, size, className }))}
+      <TouchableOpacity
         ref={ref}
+        style={buttonStyle}
+        onPress={onPress}
+        disabled={disabled}
+        activeOpacity={0.7}
         {...props}
-      />
+      >
+        <Text style={textStyles}>{children}</Text>
+      </TouchableOpacity>
     )
   }
 )
 Button.displayName = "Button"
 
-export { Button, buttonVariants }
+const styles = StyleSheet.create({
+  base: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 6,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+  },
+  variant_default: {
+    backgroundColor: '#0f172a',
+  },
+  variant_destructive: {
+    backgroundColor: '#dc2626',
+  },
+  variant_outline: {
+    backgroundColor: 'transparent',
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+  },
+  variant_secondary: {
+    backgroundColor: '#f1f5f9',
+  },
+  variant_ghost: {
+    backgroundColor: 'transparent',
+  },
+  variant_link: {
+    backgroundColor: 'transparent',
+  },
+  size_default: {
+    height: 40,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+  },
+  size_sm: {
+    height: 36,
+    paddingHorizontal: 12,
+    borderRadius: 6,
+  },
+  size_lg: {
+    height: 44,
+    paddingHorizontal: 32,
+    borderRadius: 6,
+  },
+  size_icon: {
+    height: 40,
+    width: 40,
+  },
+  disabled: {
+    opacity: 0.5,
+  },
+  text: {
+    fontSize: 14,
+    fontWeight: '500',
+    textAlign: 'center',
+  },
+  text_default: {
+    color: '#ffffff',
+  },
+  text_destructive: {
+    color: '#ffffff',
+  },
+  text_outline: {
+    color: '#0f172a',
+  },
+  text_secondary: {
+    color: '#0f172a',
+  },
+  text_ghost: {
+    color: '#0f172a',
+  },
+  text_link: {
+    color: '#0f172a',
+    textDecorationLine: 'underline',
+  },
+  textSize_default: {
+    fontSize: 14,
+  },
+  textSize_sm: {
+    fontSize: 13,
+  },
+  textSize_lg: {
+    fontSize: 16,
+  },
+  textSize_icon: {
+    fontSize: 14,
+  },
+  textDisabled: {
+    opacity: 0.5,
+  },
+})
+
+export { Button }
