@@ -129,9 +129,6 @@ export function ChatHistoryDrawer({
       style={styles.container}
       onPress={() => setVisibleMenuChatId(null)}
     >
-      <TouchableOpacity onPress={onClose} style={styles.closeButton}>
-        <FontAwesome name="times" size={24} color="black" />
-      </TouchableOpacity>
       <Button style={styles.newChatButton} onPress={onNewChat}>
         <Text>New chat </Text>
         <FontAwesome name="plus" size={16} color="white" />

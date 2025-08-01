@@ -131,10 +131,15 @@ export default function Chat({
   const generateTitle = async (chatContent: ChatMessage[]) => {
     if (!aiService || !aiService.isReady()) return;
 
+    const filteredContent = chatContent.filter((message, index) => {
+      // Exclude the first message if it's from the assistant (welcome message)
+      return !(index === 0 && message.role === "assistant");
+    });
+
     try {
       const result = await aiService.complete({
         messages: [
-          ...chatContent,
+          ...filteredContent,
           {
             role: "user",
             content:
