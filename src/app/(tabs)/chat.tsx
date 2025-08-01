@@ -17,24 +17,24 @@ export default function ChatScreen() {
   const [chats, setChats] = useState<ChatType[]>([]);
   const [activeChat, setActiveChat] = useState<ChatType | null>(null);
 
+  const loadChats = async () => {
+    let loadedChats = await getChats();
+    if (loadedChats.length === 0) {
+      const newChat = createNewChat();
+      loadedChats = await saveChat(newChat); // Save the new chat and get the updated list
+    }
+    setChats(loadedChats);
+    setActiveChat(loadedChats[0]);
+  };
+
   useEffect(() => {
-    const loadChats = async () => {
-      const loadedChats = await getChats();
-      setChats(loadedChats);
-      if (loadedChats.length > 0) {
-        setActiveChat(loadedChats[0]);
-      } else {
-        const newChat = createNewChat();
-        setActiveChat(newChat);
-        setChats([newChat]);
-      }
-    };
     loadChats();
   }, []);
 
-  const handleNewChat = () => {
+  const handleNewChat = async () => {
     const newChat = createNewChat();
-    setChats([newChat, ...chats]);
+    const updatedChats = await saveChat(newChat);
+    setChats(updatedChats);
     setActiveChat(newChat);
     setOpen(false);
   };
@@ -44,51 +44,42 @@ export default function ChatScreen() {
     setOpen(false);
   };
 
-  const onMessagesChange = useCallback((messages: any) => {
+  const onMessagesChange = useCallback(async (messages: any) => {
     setActiveChat((prev) => {
       if (!prev) return null;
       const updatedChat = { ...prev, messages };
-      saveChat(updatedChat);
-      setChats((prevChats) =>
-        prevChats.map((c) => (c.id === updatedChat.id ? updatedChat : c))
-      );
+      saveChat(updatedChat).then(setChats);
       return updatedChat;
     });
   }, []);
 
-  const onTitleChange = useCallback((title: string) => {
+  const onTitleChange = useCallback(async (title: string) => {
     setActiveChat((prev) => {
       if (!prev) return null;
       const updatedChat = { ...prev, title };
-      saveChat(updatedChat);
-      setChats((prevChats) =>
-        prevChats.map((c) => (c.id === updatedChat.id ? updatedChat : c))
-      );
+      saveChat(updatedChat).then(setChats);
       return updatedChat;
     });
   }, []);
 
-  const onRenameChat = (chat: ChatType, newTitle: string) => {
+  const onRenameChat = async (chat: ChatType, newTitle: string) => {
     const updatedChat = { ...chat, title: newTitle };
-    saveChat(updatedChat);
-    setChats(chats.map((c) => (c.id === updatedChat.id ? updatedChat : c)));
+    const updatedChats = await saveChat(updatedChat);
+    setChats(updatedChats);
     if (activeChat?.id === chat.id) {
       setActiveChat(updatedChat);
     }
   };
 
   const onDeleteChat = async (chat: ChatType) => {
-    await deleteChat(chat.id);
-    const updatedChats = chats.filter((c) => c.id !== chat.id);
+    let updatedChats = await deleteChat(chat.id);
+    if (updatedChats.length === 0) {
+      const newChat = createNewChat();
+      updatedChats = await saveChat(newChat);
+    }
     setChats(updatedChats);
     if (activeChat?.id === chat.id) {
-      if (updatedChats.length > 0) {
-        setActiveChat(updatedChats[0]);
-      } else {
-        const newChat = createNewChat();
-        setActiveChat(newChat);
-        setChats([newChat]);
-      }
+      setActiveChat(updatedChats[0]);
     }
   };
 

@@ -23,20 +23,31 @@ export const getChats = async (): Promise<Chat[]> => {
   }
 };
 
-export const saveChat = async (chat: Chat): Promise<void> => {
+const updateStoredChats = async (
+  updater: (chats: Chat[]) => Chat[]
+): Promise<Chat[]> => {
   try {
-    const chats = await getChats();
+    const currentChats = await getChats();
+    const newChats = updater(currentChats);
+    const jsonValue = JSON.stringify(newChats);
+    await AsyncStorage.setItem(CHATS_KEY, jsonValue);
+    return newChats;
+  } catch (e) {
+    console.error("Failed to update chats.", e);
+    return []; // Return empty array on failure
+  }
+};
+
+export const saveChat = async (chat: Chat): Promise<Chat[]> => {
+  return updateStoredChats((chats) => {
     const chatIndex = chats.findIndex((c) => c.id === chat.id);
     if (chatIndex > -1) {
       chats[chatIndex] = chat;
     } else {
-      chats.push(chat);
+      chats.unshift(chat); // Add to the beginning
     }
-    const jsonValue = JSON.stringify(chats);
-    await AsyncStorage.setItem(CHATS_KEY, jsonValue);
-  } catch (e) {
-    console.error("Failed to save chat.", e);
-  }
+    return chats;
+  });
 };
 
 export const createNewChat = (): Chat => {
@@ -47,13 +58,6 @@ export const createNewChat = (): Chat => {
   };
 };
 
-export const deleteChat = async (chatId: string): Promise<void> => {
-  try {
-    const chats = await getChats();
-    const updatedChats = chats.filter((c) => c.id !== chatId);
-    const jsonValue = JSON.stringify(updatedChats);
-    await AsyncStorage.setItem(CHATS_KEY, jsonValue);
-  } catch (e) {
-    console.error("Failed to delete chat.", e);
-  }
+export const deleteChat = async (chatId: string): Promise<Chat[]> => {
+  return updateStoredChats((chats) => chats.filter((c) => c.id !== chatId));
 };

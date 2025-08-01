@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   View,
   Text,
@@ -41,6 +41,10 @@ const ChatMenuItem = ({
 }) => {
   const [editing, setEditing] = useState(false);
   const [tempTitle, setTempTitle] = useState(chat.title);
+
+  useEffect(() => {
+    setTempTitle(chat.title);
+  }, [chat.title]);
 
   const handleRename = () => {
     setEditing(true);
