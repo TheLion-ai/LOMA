@@ -1,23 +1,34 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { View, ScrollView, Text, Alert, StyleSheet, TouchableOpacity, TextInput, Platform } from 'react-native';
-import { Button } from '@/components/ui/button';
-import { Avatar } from '@/components/ui/avatar';
-import { Separator } from '@/components/ui/separator';
-import { Ionicons } from '@expo/vector-icons';
-import { createAIService, AIService } from '@/lib/ai-service';
+import React, { useState, useEffect, useRef } from "react";
+import {
+  View,
+  ScrollView,
+  Text,
+  StyleSheet,
+  TouchableOpacity,
+  TextInput,
+  Platform,
+} from "react-native";
+import { Button } from "@/components/ui/button";
+import { Avatar } from "@/components/ui/avatar";
+import { Separator } from "@/components/ui/separator";
+import { Ionicons } from "@expo/vector-icons";
+import { createAIService, AIService } from "@/lib/ai-service";
+import { ChatMessage, Chat as ChatType } from "@/lib/chat-storage";
 
-interface Message {
-  id: string;
-  role: 'user' | 'assistant';
-  content: string;
-  timestamp: Date;
+interface ChatProps {
+  activeChat: ChatType;
+  messages: ChatMessage[];
+  onMessagesChange: (messages: ChatMessage[]) => void;
+  onTitleChange: (title: string) => void;
 }
 
-interface ChatProps {}
-
-export default function Chat({}: ChatProps) {
-  const [messages, setMessages] = useState<Message[]>([]);
-  const [inputText, setInputText] = useState('');
+export default function Chat({
+  activeChat,
+  messages,
+  onMessagesChange,
+  onTitleChange,
+}: ChatProps) {
+  const [inputText, setInputText] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [isModelReady, setIsModelReady] = useState(false);
   const [downloadProgress, setDownloadProgress] = useState(0);
@@ -28,7 +39,7 @@ export default function Chat({}: ChatProps) {
 
   useEffect(() => {
     initializeAI();
-    
+
     // Cleanup on unmount
     return () => {
       if (aiService) {
@@ -39,14 +50,16 @@ export default function Chat({}: ChatProps) {
 
   // Monitor download progress for native platforms
   useEffect(() => {
-    if (!aiService || Platform.OS === 'web') return;
+    if (!aiService || Platform.OS === "web") return;
 
     const checkProgress = async () => {
-      if (typeof (aiService as any).getDownloadProgress === 'function' && 
-          typeof (aiService as any).isDownloadingModel === 'function') {
+      if (
+        typeof (aiService as any).getDownloadProgress === "function" &&
+        typeof (aiService as any).isDownloadingModel === "function"
+      ) {
         const downloading = await (aiService as any).isDownloadingModel();
         setIsDownloading(downloading);
-        
+
         if (downloading) {
           const progress = await (aiService as any).getDownloadProgress();
           setDownloadProgress(progress);
@@ -61,67 +74,92 @@ export default function Chat({}: ChatProps) {
   const initializeAI = async (): Promise<void> => {
     try {
       setIsInitializing(true);
-      console.log('Initializing AI service for platform:', Platform.OS);
-      
+      console.log("Initializing AI service for platform:", Platform.OS);
+
       // Create the appropriate AI service
       const service = await createAIService();
       setAIService(service);
-      
+
       // For native platforms, check if model needs downloading
-      if (Platform.OS !== 'web' && typeof (service as any).isDownloadingModel === 'function') {
+      if (
+        Platform.OS !== "web" &&
+        typeof (service as any).isDownloadingModel === "function"
+      ) {
         const downloading = await (service as any).isDownloadingModel();
         setIsDownloading(downloading);
       }
-      
+
       // Initialize the service
       await service.initialize();
-      
+
       setIsModelReady(true);
       setIsDownloading(false);
-      console.log('AI service initialized successfully');
+      console.log("AI service initialized successfully");
 
-      // Add welcome message based on platform
-      const welcomeMessage: Message = {
-        id: Date.now().toString(),
-        role: 'assistant',
-        content: Platform.OS === 'web' 
-          ? 'Hello! I\'m Gemma 3n running with Transformers.js in your browser. How can I help you today?'
-          : `Hello! I'm Gemma 3n, your AI assistant running natively on ${Platform.OS}. How can I help you today?`,
-        timestamp: new Date(),
-      };
-      setMessages([welcomeMessage]);
+      if (messages.length === 0) {
+        const welcomeMessage: ChatMessage = {
+          role: "assistant",
+          content:
+            Platform.OS === "web"
+              ? "Hello! I'm Gemma 3n running with Transformers.js in your browser. How can I help you today?"
+              : `Hello! I'm Gemma 3n, your AI assistant running natively on ${Platform.OS}. How can I help you today?`,
+        };
+        onMessagesChange([welcomeMessage]);
+      }
     } catch (error) {
-      console.error('Error initializing AI service:', error);
-      
+      console.error("Error initializing AI service:", error);
+
       // Fallback to mock mode
       setIsModelReady(true);
       setIsDownloading(false);
-      const errorMessage: Message = {
-        id: Date.now().toString(),
-        role: 'assistant',
-        content: Platform.OS === 'web' 
-          ? 'Hello! I\'m running in demo mode. The AI model failed to load, but you can still test the chat interface!'
-          : 'Hello! I\'m running in demo mode. There was an issue loading the AI model. You can still test the interface, but responses will be simulated.',
-        timestamp: new Date(),
-      };
-      setMessages([errorMessage]);
+
+      if (messages.length === 0) {
+        const errorMessage: ChatMessage = {
+          role: "assistant",
+          content:
+            Platform.OS === "web"
+              ? "Hello! I'm running in demo mode. The AI model failed to load, but you can still test the chat interface!"
+              : "Hello! I'm running in demo mode. There was an issue loading the AI model. You can still test the interface, but responses will be simulated.",
+        };
+        onMessagesChange([errorMessage]);
+      }
     } finally {
       setIsInitializing(false);
+    }
+  };
+
+  const generateTitle = async (chatContent: ChatMessage[]) => {
+    if (!aiService || !aiService.isReady()) return;
+
+    try {
+      const result = await aiService.complete({
+        messages: [
+          ...chatContent,
+          {
+            role: "user",
+            content:
+              "Based on our conversation, suggest a short, concise title for this chat. Respond with only the title, and nothing else.",
+          },
+        ],
+        maxTokens: 20,
+      });
+      onTitleChange(result.text.trim().replace(/[^a-zA-Z0-9\s]/g, ""));
+    } catch (error) {
+      console.error("Failed to generate title", error);
     }
   };
 
   const sendMessage = async (): Promise<void> => {
     if (!inputText.trim() || !isModelReady) return;
 
-    const userMessage: Message = {
-      id: Date.now().toString(),
-      role: 'user',
+    const userMessage: ChatMessage = {
+      role: "user",
       content: inputText.trim(),
-      timestamp: new Date(),
     };
 
-    setMessages(prev => [...prev, userMessage]);
-    setInputText('');
+    const newMessages = [...messages, userMessage];
+    onMessagesChange(newMessages);
+    setInputText("");
     setIsLoading(true);
 
     try {
@@ -130,79 +168,77 @@ export default function Chat({}: ChatProps) {
       // Check if we have an AI service available
       if (!aiService || !aiService.isReady()) {
         // Mock response for demo mode
-        await new Promise(resolve => setTimeout(resolve, 1000)); // Simulate processing time
-        
+        await new Promise((resolve) => setTimeout(resolve, 1000)); // Simulate processing time
+
         const mockResponses = [
           "I'm running in demo mode. For full AI functionality, the model needs to be properly loaded!",
           "This is a demo response. The actual AI model would provide more intelligent responses.",
           "Thanks for testing the interface! In full mode, I'd use the Gemma 3n model.",
           "Demo mode is active. The real AI would analyze your message and respond appropriately.",
-          "This chat interface is working! With the AI model loaded, you'd get real responses."
+          "This chat interface is working! With the AI model loaded, you'd get real responses.",
         ];
-        
-        responseText = mockResponses[Math.floor(Math.random() * mockResponses.length)];
+
+        responseText =
+          mockResponses[Math.floor(Math.random() * mockResponses.length)];
       } else {
         // Real AI response using the modular service
         const result = await aiService.complete({
-          messages: [
-            ...messages.map(msg => ({
-              role: msg.role as 'user' | 'assistant' | 'system',
-              content: msg.content,
-            })),
-            {
-              role: 'user',
-              content: userMessage.content,
-            },
-          ],
+          messages: newMessages.map((msg) => ({
+            role: msg.role as "user" | "assistant" | "system",
+            content: msg.content,
+          })),
           maxTokens: 150,
           temperature: 0.6,
           topP: 0.9,
           stopWords: [
-            '<end_of_turn>',
-            '<|end_of_turn|>',
-            '</s>',
-            '<eos>',
-            '<|endoftext|>',
-            '<|end|>',
-            '<|eot_id|>',
-            '<|end_of_text|>',
-            '<|im_end|>',
-            '<|EOT|>',
-            '<|END_OF_TURN_TOKEN|>',
-            '\n\n\n',
-            'Human:',
-            'User:'
+            "<end_of_turn>",
+            "<|end_of_turn|>",
+            "</s>",
+            "<eos>",
+            "<|endoftext|>",
+            "<|end|>",
+            "<|eot_id|>",
+            "<|end_of_text|>",
+            "<|im_end|>",
+            "<|EOT|>",
+            "<|END_OF_TURN_TOKEN|>",
+            "\n\n\n",
+            "Human:",
+            "User:",
           ],
           onToken: (token) => {
-            console.log('Partial token:', token);
+            console.log("Partial token:", token);
           },
         });
 
         responseText = result.text;
-        
+
         // Additional fallback if response is empty
         if (!responseText || responseText.length < 3) {
-          responseText = "I apologize, but I'm having trouble generating a proper response. Could you please rephrase your question?";
+          responseText =
+            "I apologize, but I'm having trouble generating a proper response. Could you please rephrase your question?";
         }
       }
 
-      const assistantMessage: Message = {
-        id: (Date.now() + 1).toString(),
-        role: 'assistant',
+      const assistantMessage: ChatMessage = {
+        role: "assistant",
         content: responseText,
-        timestamp: new Date(),
       };
 
-      setMessages(prev => [...prev, assistantMessage]);
+      const finalMessages = [...newMessages, assistantMessage];
+      onMessagesChange(finalMessages);
+
+      if (activeChat.title === "New chat") {
+        generateTitle(finalMessages);
+      }
     } catch (error) {
-      console.error('Error generating response:', error);
-      const errorMessage: Message = {
-        id: (Date.now() + 1).toString(),
-        role: 'assistant',
-        content: 'Sorry, I encountered an error while processing your message. Please try again.',
-        timestamp: new Date(),
+      console.error("Error generating response:", error);
+      const errorMessage: ChatMessage = {
+        role: "assistant",
+        content:
+          "Sorry, I encountered an error while processing your message. Please try again.",
       };
-      setMessages(prev => [...prev, errorMessage]);
+      onMessagesChange([...newMessages, errorMessage]);
     } finally {
       setIsLoading(false);
     }
@@ -211,11 +247,18 @@ export default function Chat({}: ChatProps) {
   if (isDownloading) {
     return (
       <View style={styles.centerContainer}>
-        <Ionicons name="download-outline" size={64} color="#3B82F6" style={styles.icon} />
+        <Ionicons
+          name="download-outline"
+          size={64}
+          color="#3B82F6"
+          style={styles.icon}
+        />
         <Text style={styles.title}>Downloading Gemma 3n Model</Text>
         <Text style={styles.subtitle}>This may take a few minutes...</Text>
         <View style={styles.progressBarContainer}>
-          <View style={[styles.progressBar, { width: `${downloadProgress}%` }]} />
+          <View
+            style={[styles.progressBar, { width: `${downloadProgress}%` }]}
+          />
         </View>
         <Text style={styles.progressText}>{downloadProgress}%</Text>
       </View>
@@ -225,9 +268,16 @@ export default function Chat({}: ChatProps) {
   if (!isModelReady) {
     return (
       <View style={styles.centerContainer}>
-        <Ionicons name="chatbubble-ellipses-outline" size={64} color="#3B82F6" style={styles.icon} />
+        <Ionicons
+          name="chatbubble-ellipses-outline"
+          size={64}
+          color="#3B82F6"
+          style={styles.icon}
+        />
         <Text style={styles.title}>Initializing AI Model</Text>
-        <Text style={styles.subtitle}>Please wait while we set up Gemma 3n...</Text>
+        <Text style={styles.subtitle}>
+          Please wait while we set up Gemma 3n...
+        </Text>
       </View>
     );
   }
@@ -237,7 +287,12 @@ export default function Chat({}: ChatProps) {
       {/* Header */}
       <View style={styles.header}>
         <View style={styles.headerContent}>
-          <Ionicons name="chatbubble-ellipses" size={32} color="white" style={styles.headerIcon} />
+          <Ionicons
+            name="chatbubble-ellipses"
+            size={32}
+            color="white"
+            style={styles.headerIcon}
+          />
           <View>
             <Text style={styles.headerTitle}>Gemma 3n Chat</Text>
             <Text style={styles.headerSubtitle}>AI Assistant</Text>
@@ -249,45 +304,80 @@ export default function Chat({}: ChatProps) {
       <ScrollView
         ref={scrollViewRef}
         style={styles.messagesContainer}
-        onContentSizeChange={() => scrollViewRef.current?.scrollToEnd({ animated: true })}
+        onContentSizeChange={() =>
+          scrollViewRef.current?.scrollToEnd({ animated: true })
+        }
       >
-        {messages.map((message) => (
-          <View key={message.id} style={styles.messageWrapper}>
-            <View style={[styles.messageRow, message.role === 'user' ? styles.userRow : styles.assistantRow]}>
-              <View style={[styles.messageContent, message.role === 'user' ? styles.userContent : styles.assistantContent]}>
+        {messages.map((message, index) => (
+          <View key={index} style={styles.messageWrapper}>
+            <View
+              style={[
+                styles.messageRow,
+                message.role === "user" ? styles.userRow : styles.assistantRow,
+              ]}
+            >
+              <View
+                style={[
+                  styles.messageContent,
+                  message.role === "user"
+                    ? styles.userContent
+                    : styles.assistantContent,
+                ]}
+              >
                 <View style={styles.avatarContainer}>
                   <Avatar style={styles.avatar}>
-                    {message.role === 'user' ? (
+                    {message.role === "user" ? (
                       <Ionicons name="person" size={20} color="#10B981" />
                     ) : (
-                      <Ionicons name="chatbubble-ellipses" size={20} color="#3B82F6" />
+                      <Ionicons
+                        name="chatbubble-ellipses"
+                        size={20}
+                        color="#3B82F6"
+                      />
                     )}
                   </Avatar>
                 </View>
-                <View style={[styles.messageBubble, message.role === 'user' ? styles.userBubble : styles.assistantBubble]}>
-                  <Text style={[styles.messageText, message.role === 'user' ? styles.userText : styles.assistantText]}>
+                <View
+                  style={[
+                    styles.messageBubble,
+                    message.role === "user"
+                      ? styles.userBubble
+                      : styles.assistantBubble,
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.messageText,
+                      message.role === "user"
+                        ? styles.userText
+                        : styles.assistantText,
+                    ]}
+                  >
                     {message.content}
-                  </Text>
-                  <Text style={[styles.timestamp, message.role === 'user' ? styles.userTimestamp : styles.assistantTimestamp]}>
-                    {message.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                   </Text>
                 </View>
               </View>
             </View>
           </View>
         ))}
-        
+
         {isLoading && (
           <View style={styles.messageWrapper}>
             <View style={[styles.messageRow, styles.assistantRow]}>
               <View style={[styles.messageContent, styles.assistantContent]}>
                 <View style={styles.avatarContainer}>
                   <Avatar style={styles.avatar}>
-                    <Ionicons name="chatbubble-ellipses" size={20} color="#3B82F6" />
+                    <Ionicons
+                      name="chatbubble-ellipses"
+                      size={20}
+                      color="#3B82F6"
+                    />
                   </Avatar>
                 </View>
                 <View style={[styles.messageBubble, styles.assistantBubble]}>
-                  <Text style={[styles.messageText, styles.assistantText]}>Thinking...</Text>
+                  <Text style={[styles.messageText, styles.assistantText]}>
+                    Thinking...
+                  </Text>
                 </View>
               </View>
             </View>
@@ -311,7 +401,10 @@ export default function Chat({}: ChatProps) {
           <TouchableOpacity
             onPress={sendMessage}
             disabled={!inputText.trim() || isLoading}
-            style={[styles.sendButton, (!inputText.trim() || isLoading) && styles.sendButtonDisabled]}
+            style={[
+              styles.sendButton,
+              (!inputText.trim() || isLoading) && styles.sendButtonDisabled,
+            ]}
           >
             <Ionicons name="send" size={16} color="white" />
           </TouchableOpacity>
@@ -324,12 +417,12 @@ export default function Chat({}: ChatProps) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: 'white',
+    backgroundColor: "white",
   },
   centerContainer: {
     flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
+    justifyContent: "center",
+    alignItems: "center",
     padding: 16,
   },
   icon: {
@@ -337,50 +430,50 @@ const styles = StyleSheet.create({
   },
   title: {
     fontSize: 18,
-    fontWeight: '600',
+    fontWeight: "600",
     marginBottom: 8,
   },
   subtitle: {
     fontSize: 14,
-    color: '#6B7280',
+    color: "#6B7280",
     marginBottom: 16,
   },
   progressBarContainer: {
-    width: '100%',
+    width: "100%",
     maxWidth: 300,
     height: 8,
-    backgroundColor: '#E5E7EB',
+    backgroundColor: "#E5E7EB",
     borderRadius: 4,
-    overflow: 'hidden',
+    overflow: "hidden",
   },
   progressBar: {
-    height: '100%',
-    backgroundColor: '#3B82F6',
+    height: "100%",
+    backgroundColor: "#3B82F6",
   },
   progressText: {
     fontSize: 14,
-    color: '#6B7280',
+    color: "#6B7280",
     marginTop: 8,
   },
   header: {
-    backgroundColor: '#3B82F6',
+    backgroundColor: "#3B82F6",
     padding: 16,
     paddingTop: 48,
   },
   headerContent: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
   },
   headerIcon: {
     marginRight: 12,
   },
   headerTitle: {
-    color: 'white',
+    color: "white",
     fontSize: 18,
-    fontWeight: '600',
+    fontWeight: "600",
   },
   headerSubtitle: {
-    color: '#BFDBFE',
+    color: "#BFDBFE",
     fontSize: 14,
   },
   messagesContainer: {
@@ -391,23 +484,23 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   messageRow: {
-    flexDirection: 'row',
+    flexDirection: "row",
   },
   userRow: {
-    justifyContent: 'flex-end',
+    justifyContent: "flex-end",
   },
   assistantRow: {
-    justifyContent: 'flex-start',
+    justifyContent: "flex-start",
   },
   messageContent: {
-    flexDirection: 'row',
-    maxWidth: '80%',
+    flexDirection: "row",
+    maxWidth: "80%",
   },
   userContent: {
-    flexDirection: 'row-reverse',
+    flexDirection: "row-reverse",
   },
   assistantContent: {
-    flexDirection: 'row',
+    flexDirection: "row",
   },
   avatarContainer: {
     marginHorizontal: 8,
@@ -421,44 +514,44 @@ const styles = StyleSheet.create({
     borderRadius: 12,
   },
   userBubble: {
-    backgroundColor: '#3B82F6',
+    backgroundColor: "#3B82F6",
     borderBottomRightRadius: 4,
   },
   assistantBubble: {
-    backgroundColor: '#F3F4F6',
+    backgroundColor: "#F3F4F6",
     borderBottomLeftRadius: 4,
   },
   messageText: {
     fontSize: 16,
   },
   userText: {
-    color: 'white',
+    color: "white",
   },
   assistantText: {
-    color: '#1F2937',
+    color: "#1F2937",
   },
   timestamp: {
     fontSize: 12,
     marginTop: 4,
   },
   userTimestamp: {
-    color: '#BFDBFE',
+    color: "#BFDBFE",
   },
   assistantTimestamp: {
-    color: '#6B7280',
+    color: "#6B7280",
   },
   inputContainer: {
     padding: 16,
-    backgroundColor: 'white',
+    backgroundColor: "white",
   },
   inputRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-end',
+    flexDirection: "row",
+    alignItems: "flex-end",
   },
   textInput: {
     flex: 1,
     borderWidth: 1,
-    borderColor: '#D1D5DB',
+    borderColor: "#D1D5DB",
     borderRadius: 8,
     padding: 12,
     marginRight: 8,
@@ -466,13 +559,13 @@ const styles = StyleSheet.create({
     fontSize: 16,
   },
   sendButton: {
-    backgroundColor: '#3B82F6',
+    backgroundColor: "#3B82F6",
     borderRadius: 8,
     padding: 12,
-    justifyContent: 'center',
-    alignItems: 'center',
+    justifyContent: "center",
+    alignItems: "center",
   },
   sendButtonDisabled: {
-    backgroundColor: '#9CA3AF',
+    backgroundColor: "#9CA3AF",
   },
 });
