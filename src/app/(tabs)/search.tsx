@@ -1,6 +1,6 @@
 import React from "react";
-import { VectorDBDemo } from "@/components/vector-db-demo";
+import { MedicalDBDemo } from "@/components/medical-db-demo";
 
 export default function SearchScreen() {
-  return <VectorDBDemo />;
+  return <MedicalDBDemo />;
 }
