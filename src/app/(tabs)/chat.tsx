@@ -32,10 +32,18 @@ export default function ChatScreen() {
   }, []);
 
   const handleNewChat = async () => {
-    const newChat = createNewChat();
-    const updatedChats = await saveChat(newChat);
-    setChats(updatedChats);
-    setActiveChat(newChat);
+    const emptyChat = chats.find(
+      (chat) => chat.title === "New chat" && chat.messages.length <= 1
+    );
+
+    if (emptyChat) {
+      setActiveChat(emptyChat);
+    } else {
+      const newChat = createNewChat();
+      const updatedChats = await saveChat(newChat);
+      setChats(updatedChats);
+      setActiveChat(newChat);
+    }
     setOpen(false);
   };
 
