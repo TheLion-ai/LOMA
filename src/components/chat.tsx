@@ -8,7 +8,6 @@ import {
   TextInput,
   Platform,
 } from "react-native";
-import { Button } from "@/components/ui/button";
 import { Avatar } from "@/components/ui/avatar";
 import { Separator } from "@/components/ui/separator";
 import { Ionicons } from "@expo/vector-icons";
@@ -29,13 +28,14 @@ export default function Chat({
   onTitleChange,
 }: ChatProps) {
   const [inputText, setInputText] = useState("");
-  const [isLoading, setIsLoading] = useState(false);
   const [isModelReady, setIsModelReady] = useState(false);
   const [downloadProgress, setDownloadProgress] = useState(0);
   const [isDownloading, setIsDownloading] = useState(false);
-  const [isInitializing, setIsInitializing] = useState(false);
   const [aiService, setAIService] = useState<AIService | null>(null);
+  const [streamingMessage, setStreamingMessage] = useState<string>("");
+  const [isStreaming, setIsStreaming] = useState(false);
   const scrollViewRef = useRef<ScrollView>(null);
+  const [dotCount, setDotCount] = useState(1);
 
   useEffect(() => {
     initializeAI();
@@ -47,6 +47,17 @@ export default function Chat({
       }
     };
   }, []);
+
+  useEffect(() => {
+    if (isStreaming && !streamingMessage) {
+      const interval = setInterval(() => {
+        setDotCount(prev => prev >= 3 ? 1 : prev + 1);
+      }, 500);
+      return () => clearInterval(interval);
+    } else {
+      setDotCount(1);
+    }
+  }, [isStreaming, streamingMessage]);
 
   // Monitor download progress for native platforms
   useEffect(() => {
@@ -73,7 +84,6 @@ export default function Chat({
 
   const initializeAI = async (): Promise<void> => {
     try {
-      setIsInitializing(true);
       console.log("Initializing AI service for platform:", Platform.OS);
 
       // Create the appropriate AI service
@@ -123,8 +133,6 @@ export default function Chat({
         };
         onMessagesChange([errorMessage]);
       }
-    } finally {
-      setIsInitializing(false);
     }
   };
 
@@ -154,8 +162,13 @@ export default function Chat({
     }
   };
 
+  const cleanupStreamingState = () => {
+    setIsStreaming(false);
+    setStreamingMessage("");
+  };
+
   const sendMessage = async (): Promise<void> => {
-    if (!inputText.trim() || !isModelReady) return;
+    if (!inputText.trim() || !isModelReady || isStreaming) return;
 
     const userMessage: ChatMessage = {
       role: "user",
@@ -165,15 +178,16 @@ export default function Chat({
     const newMessages = [...messages, userMessage];
     onMessagesChange(newMessages);
     setInputText("");
-    setIsLoading(true);
 
     try {
       let responseText: string;
 
+      setStreamingMessage("");
+      setIsStreaming(true);
+
       // Check if we have an AI service available
       if (!aiService || !aiService.isReady()) {
-        // Mock response for demo mode
-        await new Promise((resolve) => setTimeout(resolve, 1000)); // Simulate processing time
+        await new Promise((resolve) => setTimeout(resolve, 1000));
 
         const mockResponses = [
           "I'm running in demo mode. For full AI functionality, the model needs to be properly loaded!",
@@ -186,7 +200,8 @@ export default function Chat({
         responseText =
           mockResponses[Math.floor(Math.random() * mockResponses.length)];
       } else {
-        // Real AI response using the modular service
+        
+        // Real AI response using the modular service with streaming
         const result = await aiService.complete({
           messages: newMessages.map((msg) => ({
             role: msg.role as "user" | "assistant" | "system",
@@ -212,11 +227,14 @@ export default function Chat({
             "User:",
           ],
           onToken: (token) => {
-            console.log("Partial token:", token);
+            setStreamingMessage((prev) => prev + token);
+            setTimeout(() => {
+              scrollViewRef.current?.scrollToEnd({ animated: true });
+            }, 10);
           },
         });
 
-        responseText = result.text;
+        responseText = result.text || streamingMessage;
 
         // Additional fallback if response is empty
         if (!responseText || responseText.length < 3) {
@@ -238,6 +256,7 @@ export default function Chat({
       }
     } catch (error) {
       console.error("Error generating response:", error);
+      
       const errorMessage: ChatMessage = {
         role: "assistant",
         content:
@@ -245,7 +264,7 @@ export default function Chat({
       };
       onMessagesChange([...newMessages, errorMessage]);
     } finally {
-      setIsLoading(false);
+      cleanupStreamingState();
     }
   };
 
@@ -366,7 +385,7 @@ export default function Chat({
           </View>
         ))}
 
-        {isLoading && (
+        {isStreaming && (
           <View style={styles.messageWrapper}>
             <View style={[styles.messageRow, styles.assistantRow]}>
               <View style={[styles.messageContent, styles.assistantContent]}>
@@ -379,20 +398,22 @@ export default function Chat({
                     />
                   </Avatar>
                 </View>
-                <View style={[styles.messageBubble, styles.assistantBubble]}>
+                <View style={[styles.messageBubble, styles.assistantBubble, styles.streamingBubble]}>
                   <Text style={[styles.messageText, styles.assistantText]}>
-                    Thinking...
+                    {streamingMessage || ".".repeat(dotCount)}
+                    {streamingMessage && <Text style={styles.cursor}>▊</Text>}
                   </Text>
                 </View>
               </View>
             </View>
           </View>
         )}
+
+
       </ScrollView>
 
       <Separator />
 
-      {/* Input */}
       <View style={styles.inputContainer}>
         <View style={styles.inputRow}>
           <TextInput
@@ -405,10 +426,10 @@ export default function Chat({
           />
           <TouchableOpacity
             onPress={sendMessage}
-            disabled={!inputText.trim() || isLoading}
+            disabled={!inputText.trim() || isStreaming}
             style={[
               styles.sendButton,
-              (!inputText.trim() || isLoading) && styles.sendButtonDisabled,
+              (!inputText.trim() || isStreaming) && styles.sendButtonDisabled,
             ]}
           >
             <Ionicons name="send" size={16} color="white" />
@@ -525,6 +546,14 @@ const styles = StyleSheet.create({
   assistantBubble: {
     backgroundColor: "#F3F4F6",
     borderBottomLeftRadius: 4,
+  },
+  streamingBubble: {
+    borderWidth: 1,
+    borderColor: "#E5E7EB",
+  },
+  cursor: {
+    color: "#3B82F6",
+    fontWeight: "bold",
   },
   messageText: {
     fontSize: 16,
