@@ -8,6 +8,7 @@ import {
   getChats,
   saveChat,
   createNewChat,
+  deleteChat,
   Chat as ChatType,
 } from "@/lib/chat-storage";
 
@@ -67,6 +68,30 @@ export default function ChatScreen() {
     });
   }, []);
 
+  const onRenameChat = (chat: ChatType, newTitle: string) => {
+    const updatedChat = { ...chat, title: newTitle };
+    saveChat(updatedChat);
+    setChats(chats.map((c) => (c.id === updatedChat.id ? updatedChat : c)));
+    if (activeChat?.id === chat.id) {
+      setActiveChat(updatedChat);
+    }
+  };
+
+  const onDeleteChat = async (chat: ChatType) => {
+    await deleteChat(chat.id);
+    const updatedChats = chats.filter((c) => c.id !== chat.id);
+    setChats(updatedChats);
+    if (activeChat?.id === chat.id) {
+      if (updatedChats.length > 0) {
+        setActiveChat(updatedChats[0]);
+      } else {
+        const newChat = createNewChat();
+        setActiveChat(newChat);
+        setChats([newChat]);
+      }
+    }
+  };
+
   return (
     <Drawer
       open={open}
@@ -78,6 +103,8 @@ export default function ChatScreen() {
             chats={chats}
             onNewChat={handleNewChat}
             onSelectChat={handleSelectChat}
+            onRenameChat={onRenameChat}
+            onDeleteChat={onDeleteChat}
             onClose={() => setOpen(false)}
           />
         );

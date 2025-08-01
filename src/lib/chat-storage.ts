@@ -46,3 +46,14 @@ export const createNewChat = (): Chat => {
     messages: [],
   };
 };
+
+export const deleteChat = async (chatId: string): Promise<void> => {
+  try {
+    const chats = await getChats();
+    const updatedChats = chats.filter((c) => c.id !== chatId);
+    const jsonValue = JSON.stringify(updatedChats);
+    await AsyncStorage.setItem(CHATS_KEY, jsonValue);
+  } catch (e) {
+    console.error("Failed to delete chat.", e);
+  }
+};
