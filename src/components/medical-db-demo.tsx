@@ -92,7 +92,7 @@ export function MedicalDBDemo() {
         const results = await tursoService.searchMedicalDocuments({
           query: searchQuery,
           limit: 5,
-          threshold: 0.1
+          threshold: 0.3  // Lower threshold for more results with normalized embeddings
         });
         setDocumentResults(results);
         setQAResults([]);
@@ -100,7 +100,7 @@ export function MedicalDBDemo() {
         const results = await tursoService.searchMedicalQA({
           query: searchQuery,
           limit: 5,
-          threshold: 0.1
+          threshold: 0.3  // Lower threshold for more results with normalized embeddings
         });
         setQAResults(results);
         setDocumentResults([]);

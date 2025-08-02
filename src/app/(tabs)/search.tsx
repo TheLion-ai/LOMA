@@ -1,6 +1,6 @@
 import React from "react";
-import { MedicalDBDemo } from "@/components/medical-db-demo";
+import EmbeddingDemo from "@/components/embedding-demo";
 
 export default function SearchScreen() {
-  return <MedicalDBDemo />;
+  return <EmbeddingDemo />;
 }

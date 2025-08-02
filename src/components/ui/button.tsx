@@ -14,7 +14,7 @@ export interface ButtonProps {
   textStyle?: TextStyle
 }
 
-const Button = React.forwardRef<TouchableOpacity, ButtonProps>(
+const Button = React.forwardRef<any, ButtonProps>(
   ({ variant = "default", size = "default", disabled = false, onPress, children, style, textStyle, ...props }, ref) => {
     const buttonStyle = [
       styles.base,
