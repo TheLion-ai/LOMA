@@ -11,8 +11,13 @@ import {
 import { Avatar } from "@/components/ui/avatar";
 import { Separator } from "@/components/ui/separator";
 import { Ionicons } from "@expo/vector-icons";
-import { createAIService, AIService } from "@/lib/ai-service";
+import { createAIService, EnhancedAIService } from "@/lib/ai-service";
 import { ChatMessage, Chat as ChatType } from "@/lib/chat-storage";
+import {
+  getVectorSearchService,
+  VectorSearchService,
+  CombinedSearchResult,
+} from "@/lib/vector-search-service";
 
 interface ChatProps {
   activeChat: ChatType;
@@ -31,27 +36,30 @@ export default function Chat({
   const [isModelReady, setIsModelReady] = useState(false);
   const [downloadProgress, setDownloadProgress] = useState(0);
   const [isDownloading, setIsDownloading] = useState(false);
-  const [aiService, setAIService] = useState<AIService | null>(null);
+  const [aiService, setAIService] = useState<EnhancedAIService | null>(null);
+  const [vectorSearchService, setVectorSearchService] =
+    useState<VectorSearchService | null>(null);
+  const [searchResults, setSearchResults] = useState<CombinedSearchResult[]>(
+    []
+  );
   const [streamingMessage, setStreamingMessage] = useState<string>("");
   const [isStreaming, setIsStreaming] = useState(false);
   const scrollViewRef = useRef<ScrollView>(null);
   const [dotCount, setDotCount] = useState(1);
 
   useEffect(() => {
-    initializeAI();
+    initializeServices();
 
     // Cleanup on unmount
     return () => {
-      if (aiService) {
-        aiService.cleanup();
-      }
+      cleanup();
     };
   }, []);
 
   useEffect(() => {
     if (isStreaming && !streamingMessage) {
       const interval = setInterval(() => {
-        setDotCount(prev => prev >= 3 ? 1 : prev + 1);
+        setDotCount((prev) => (prev >= 3 ? 1 : prev + 1));
       }, 500);
       return () => clearInterval(interval);
     } else {
@@ -82,11 +90,11 @@ export default function Chat({
     return () => clearInterval(interval);
   }, [aiService]);
 
-  const initializeAI = async (): Promise<void> => {
+  const initializeServices = async (): Promise<void> => {
     try {
-      console.log("Initializing AI service for platform:", Platform.OS);
+      console.log("Initializing services for platform:", Platform.OS);
 
-      // Create the appropriate AI service
+      // Create and initialize AI service
       const service = await createAIService();
       setAIService(service);
 
@@ -99,25 +107,39 @@ export default function Chat({
         setIsDownloading(downloading);
       }
 
-      // Initialize the service
+      // Initialize the AI service
       await service.initialize();
+
+      // Initialize vector search service
+      try {
+        const vectorService = getVectorSearchService();
+        await vectorService.initialize();
+        setVectorSearchService(vectorService);
+        console.log("Vector search service initialized successfully");
+      } catch (vectorError) {
+        console.warn(
+          "Vector search service initialization failed:",
+          vectorError
+        );
+        // Continue without vector search - not critical for basic chat
+      }
 
       setIsModelReady(true);
       setIsDownloading(false);
-      console.log("AI service initialized successfully");
+      console.log("All services initialized successfully");
 
       if (messages.length === 0) {
         const welcomeMessage: ChatMessage = {
           role: "assistant",
           content:
             Platform.OS === "web"
-              ? "Hello! I'm Gemma 3n running with Transformers.js in your browser. How can I help you today?"
-              : `Hello! I'm Gemma 3n, your AI assistant running natively on ${Platform.OS}. How can I help you today?`,
+              ? "Hello! I'm Gemma 3n-E2B running with Transformers.js in your browser. How can I help you today?"
+              : `Hello! I'm Gemma 3n-E2B, your AI assistant running natively on ${Platform.OS} with vector search capabilities. How can I help you today?`,
         };
         onMessagesChange([welcomeMessage]);
       }
     } catch (error) {
-      console.error("Error initializing AI service:", error);
+      console.error("Error initializing services:", error);
 
       // Fallback to mock mode
       setIsModelReady(true);
@@ -128,11 +150,45 @@ export default function Chat({
           role: "assistant",
           content:
             Platform.OS === "web"
-              ? "Hello! I'm running in demo mode. The AI model failed to load, but you can still test the chat interface!"
-              : "Hello! I'm running in demo mode. There was an issue loading the AI model. You can still test the interface, but responses will be simulated.",
+              ? "Hello! I'm Gemma 3n-E2B running in demo mode. The AI model failed to load, but you can still test the chat interface!"
+              : "Hello! I'm Gemma 3n-E2B running in demo mode. There was an issue loading the AI model. You can still test the interface, but responses will be simulated.",
         };
         onMessagesChange([errorMessage]);
       }
+    }
+  };
+
+  const cleanup = async () => {
+    try {
+      if (aiService) {
+        await aiService.cleanup();
+      }
+      if (vectorSearchService) {
+        await vectorSearchService.cleanup();
+      }
+    } catch (error) {
+      console.error("Error during cleanup:", error);
+    }
+  };
+
+  const performVectorSearch = async (
+    query: string
+  ): Promise<CombinedSearchResult[]> => {
+    if (!vectorSearchService || !vectorSearchService.isReady()) {
+      return [];
+    }
+
+    try {
+      const results = await vectorSearchService.search({
+        query,
+        limit: 3,
+        threshold: 0.7,
+        searchType: "both",
+      });
+      return results;
+    } catch (error) {
+      console.warn("Vector search failed:", error);
+      return [];
     }
   };
 
@@ -200,13 +256,41 @@ export default function Chat({
         responseText =
           mockResponses[Math.floor(Math.random() * mockResponses.length)];
       } else {
-        
+        // Perform vector search to provide context
+        const searchResults = await performVectorSearch(userMessage.content);
+        setSearchResults(searchResults);
+
+        // Build context from search results
+        let contextMessage = "";
+        if (searchResults.length > 0) {
+          contextMessage = "Based on relevant medical information:\n\n";
+          searchResults.forEach((result, index) => {
+            contextMessage += `${index + 1}. ${
+              result.title
+            }: ${result.content.substring(0, 200)}...\n\n`;
+          });
+          contextMessage +=
+            "Please provide a response based on this context and your medical knowledge.\n\n";
+        }
+
+        // Prepare messages with context if available
+        const messagesWithContext = contextMessage
+          ? [
+              ...newMessages.slice(0, -1), // All messages except the last user message
+              {
+                role: "system" as const,
+                content: contextMessage,
+              },
+              userMessage, // Add the user message after context
+            ]
+          : newMessages.map((msg) => ({
+              role: msg.role as "user" | "assistant" | "system",
+              content: msg.content,
+            }));
+
         // Real AI response using the modular service with streaming
         const result = await aiService.complete({
-          messages: newMessages.map((msg) => ({
-            role: msg.role as "user" | "assistant" | "system",
-            content: msg.content,
-          })),
+          messages: messagesWithContext,
           maxTokens: 150,
           temperature: 0.6,
           topP: 0.9,
@@ -256,7 +340,7 @@ export default function Chat({
       }
     } catch (error) {
       console.error("Error generating response:", error);
-      
+
       const errorMessage: ChatMessage = {
         role: "assistant",
         content:
@@ -332,6 +416,30 @@ export default function Chat({
           scrollViewRef.current?.scrollToEnd({ animated: true })
         }
       >
+        {/* Search Results Display */}
+        {searchResults.length > 0 && (
+          <View style={styles.searchResultsContainer}>
+            <Text style={styles.searchResultsTitle}>
+              📚 Relevant Medical Information:
+            </Text>
+            {searchResults.map((result, index) => (
+              <View key={result.id} style={styles.searchResultItem}>
+                <Text style={styles.searchResultType}>
+                  {result.type === "document" ? "📄" : "❓"}{" "}
+                  {result.type.toUpperCase()}
+                </Text>
+                <Text style={styles.searchResultTitle}>{result.title}</Text>
+                <Text style={styles.searchResultContent}>
+                  {result.content.substring(0, 150)}...
+                </Text>
+                <Text style={styles.searchResultSimilarity}>
+                  Relevance: {(result.similarity * 100).toFixed(1)}%
+                </Text>
+              </View>
+            ))}
+          </View>
+        )}
+
         {messages.map((message, index) => (
           <View key={index} style={styles.messageWrapper}>
             <View
@@ -398,7 +506,13 @@ export default function Chat({
                     />
                   </Avatar>
                 </View>
-                <View style={[styles.messageBubble, styles.assistantBubble, styles.streamingBubble]}>
+                <View
+                  style={[
+                    styles.messageBubble,
+                    styles.assistantBubble,
+                    styles.streamingBubble,
+                  ]}
+                >
                   <Text style={[styles.messageText, styles.assistantText]}>
                     {streamingMessage || ".".repeat(dotCount)}
                     {streamingMessage && <Text style={styles.cursor}>▊</Text>}
@@ -408,8 +522,6 @@ export default function Chat({
             </View>
           </View>
         )}
-
-
       </ScrollView>
 
       <Separator />
@@ -601,5 +713,52 @@ const styles = StyleSheet.create({
   },
   sendButtonDisabled: {
     backgroundColor: "#9CA3AF",
+  },
+  // Search Results Styles
+  searchResultsContainer: {
+    marginHorizontal: 16,
+    marginVertical: 8,
+    padding: 12,
+    backgroundColor: "#F8FAFC",
+    borderRadius: 8,
+    borderLeftWidth: 3,
+    borderLeftColor: "#3B82F6",
+  },
+  searchResultsTitle: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: "#1F2937",
+    marginBottom: 8,
+  },
+  searchResultItem: {
+    backgroundColor: "white",
+    padding: 10,
+    marginBottom: 6,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: "#E5E7EB",
+  },
+  searchResultType: {
+    fontSize: 12,
+    fontWeight: "500",
+    color: "#6B7280",
+    marginBottom: 4,
+  },
+  searchResultTitle: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: "#1F2937",
+    marginBottom: 4,
+  },
+  searchResultContent: {
+    fontSize: 12,
+    color: "#4B5563",
+    lineHeight: 16,
+    marginBottom: 4,
+  },
+  searchResultSimilarity: {
+    fontSize: 11,
+    color: "#3B82F6",
+    fontWeight: "500",
   },
 });

@@ -1,8 +1,8 @@
-import { Platform } from 'react-native';
+import { Platform } from "react-native";
 
 // Types for AI service
 export interface AIMessage {
-  role: 'user' | 'assistant' | 'system';
+  role: "user" | "assistant" | "system";
   content: string;
 }
 
@@ -27,21 +27,23 @@ export interface AIService {
   cleanup(): Promise<void>;
 }
 
-// Factory function to create the appropriate AI service
-import { EmbeddingService, TransformersEmbeddingService } from './embedding-service';
-
-// Factory function to create the appropriate AI service
-export async function createAIService(): Promise<AIService> {
-  if (Platform.OS === 'web') {
-    const { TransformersAIService } = await import('./transformers-ai-service');
-    return new TransformersAIService();
-  } else {
-    const { LlamaAIService } = await import('./llama-ai-service');
-    return new LlamaAIService();
-  }
+// Enhanced AI service interface with embedding capabilities
+export interface EnhancedAIService extends AIService {
+  generateEmbedding?(text: string): Promise<Float32Array>;
+  searchSimilar?(
+    query: string,
+    documents: Array<{ id: string; content: string; embedding?: Float32Array }>
+  ): Promise<Array<{ id: string; content: string; similarity: number }>>;
 }
 
-export async function createEmbeddingService(): Promise<EmbeddingService> {
-  // For now, only transformers is supported
-  return new TransformersEmbeddingService();
+// Factory function to create the appropriate AI service
+export async function createAIService(): Promise<EnhancedAIService> {
+  if (Platform.OS === "web") {
+    const { TransformersAIService } = await import("./transformers-ai-service");
+    return new TransformersAIService();
+  } else {
+    // Use ExecuTorch for mobile platforms (production-ready)
+    const { ExecuTorchAIService } = await import("./executorch-ai-service");
+    return new ExecuTorchAIService();
+  }
 }

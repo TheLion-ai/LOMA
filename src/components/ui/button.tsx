@@ -1,28 +1,55 @@
-import * as React from "react"
-import { TouchableOpacity, Text, StyleSheet, ViewStyle, TextStyle } from "react-native"
+import * as React from "react";
+import {
+  TouchableOpacity,
+  Text,
+  StyleSheet,
+  ViewStyle,
+  TextStyle,
+} from "react-native";
 
-type ButtonVariant = "default" | "destructive" | "outline" | "secondary" | "ghost" | "link"
-type ButtonSize = "default" | "sm" | "lg" | "icon"
+type ButtonVariant =
+  | "default"
+  | "destructive"
+  | "outline"
+  | "secondary"
+  | "ghost"
+  | "link";
+type ButtonSize = "default" | "sm" | "lg" | "icon";
 
 export interface ButtonProps {
-  variant?: ButtonVariant
-  size?: ButtonSize
-  disabled?: boolean
-  onPress?: () => void
-  children?: React.ReactNode
-  style?: ViewStyle
-  textStyle?: TextStyle
+  variant?: ButtonVariant;
+  size?: ButtonSize;
+  disabled?: boolean;
+  onPress?: () => void;
+  children?: React.ReactNode;
+  style?: ViewStyle;
+  textStyle?: TextStyle;
 }
 
-const Button = React.forwardRef<TouchableOpacity, ButtonProps>(
-  ({ variant = "default", size = "default", disabled = false, onPress, children, style, textStyle, ...props }, ref) => {
+const Button = React.forwardRef<
+  React.ComponentRef<typeof TouchableOpacity>,
+  ButtonProps
+>(
+  (
+    {
+      variant = "default",
+      size = "default",
+      disabled = false,
+      onPress,
+      children,
+      style,
+      textStyle,
+      ...props
+    },
+    ref
+  ) => {
     const buttonStyle = [
       styles.base,
       styles[`variant_${variant}`],
       styles[`size_${size}`],
       disabled && styles.disabled,
       style,
-    ]
+    ];
 
     const textStyles = [
       styles.text,
@@ -30,7 +57,7 @@ const Button = React.forwardRef<TouchableOpacity, ButtonProps>(
       styles[`textSize_${size}`],
       disabled && styles.textDisabled,
       textStyle,
-    ]
+    ];
 
     return (
       <TouchableOpacity
@@ -43,39 +70,39 @@ const Button = React.forwardRef<TouchableOpacity, ButtonProps>(
       >
         <Text style={textStyles}>{children}</Text>
       </TouchableOpacity>
-    )
+    );
   }
-)
-Button.displayName = "Button"
+);
+Button.displayName = "Button";
 
 const styles = StyleSheet.create({
   base: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
     borderRadius: 6,
     paddingHorizontal: 16,
     paddingVertical: 8,
   },
   variant_default: {
-    backgroundColor: '#0f172a',
+    backgroundColor: "#0f172a",
   },
   variant_destructive: {
-    backgroundColor: '#dc2626',
+    backgroundColor: "#dc2626",
   },
   variant_outline: {
-    backgroundColor: 'transparent',
+    backgroundColor: "transparent",
     borderWidth: 1,
-    borderColor: '#e2e8f0',
+    borderColor: "#e2e8f0",
   },
   variant_secondary: {
-    backgroundColor: '#f1f5f9',
+    backgroundColor: "#f1f5f9",
   },
   variant_ghost: {
-    backgroundColor: 'transparent',
+    backgroundColor: "transparent",
   },
   variant_link: {
-    backgroundColor: 'transparent',
+    backgroundColor: "transparent",
   },
   size_default: {
     height: 40,
@@ -101,27 +128,27 @@ const styles = StyleSheet.create({
   },
   text: {
     fontSize: 14,
-    fontWeight: '500',
-    textAlign: 'center',
+    fontWeight: "500",
+    textAlign: "center",
   },
   text_default: {
-    color: '#ffffff',
+    color: "#ffffff",
   },
   text_destructive: {
-    color: '#ffffff',
+    color: "#ffffff",
   },
   text_outline: {
-    color: '#0f172a',
+    color: "#0f172a",
   },
   text_secondary: {
-    color: '#0f172a',
+    color: "#0f172a",
   },
   text_ghost: {
-    color: '#0f172a',
+    color: "#0f172a",
   },
   text_link: {
-    color: '#0f172a',
-    textDecorationLine: 'underline',
+    color: "#0f172a",
+    textDecorationLine: "underline",
   },
   textSize_default: {
     fontSize: 14,
@@ -138,6 +165,6 @@ const styles = StyleSheet.create({
   textDisabled: {
     opacity: 0.5,
   },
-})
+});
 
-export { Button }
+export { Button };
