@@ -40,3 +40,4 @@ app-example
 .claude
 model_cache
 android
+.env
