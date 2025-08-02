@@ -308,23 +308,6 @@ export default function Chat({
 
   return (
     <View style={styles.container}>
-      {/* Header */}
-      <View style={styles.header}>
-        <View style={styles.headerContent}>
-          <Ionicons
-            name="chatbubble-ellipses"
-            size={32}
-            color="white"
-            style={styles.headerIcon}
-          />
-          <View>
-            <Text style={styles.headerTitle}>Gemma 3n Chat</Text>
-            <Text style={styles.headerSubtitle}>AI Assistant</Text>
-          </View>
-        </View>
-      </View>
-
-      {/* Messages */}
       <ScrollView
         ref={scrollViewRef}
         style={styles.messagesContainer}
@@ -480,27 +463,6 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: "#6B7280",
     marginTop: 8,
-  },
-  header: {
-    backgroundColor: "#3B82F6",
-    padding: 16,
-    paddingTop: 48,
-  },
-  headerContent: {
-    flexDirection: "row",
-    alignItems: "center",
-  },
-  headerIcon: {
-    marginRight: 12,
-  },
-  headerTitle: {
-    color: "white",
-    fontSize: 18,
-    fontWeight: "600",
-  },
-  headerSubtitle: {
-    color: "#BFDBFE",
-    fontSize: 14,
   },
   messagesContainer: {
     flex: 1,

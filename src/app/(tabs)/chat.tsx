@@ -1,9 +1,9 @@
 import React, { useState, useEffect, useCallback } from "react";
-import { View, StyleSheet, TouchableOpacity } from "react-native";
-import Chat from "@/components/chat";
+import { View, StyleSheet } from "react-native";
+import ChatComponent from "@/components/chat";
 import { ChatHistoryDrawer } from "@/components/chat-history-drawer";
 import { Drawer } from "react-native-drawer-layout";
-import { FontAwesome } from "@expo/vector-icons";
+import DrawerTabHeader from "@/components/ui/drawer-tab-header";
 import {
   getChats,
   saveChat,
@@ -110,16 +110,13 @@ export default function ChatScreen() {
       }}
     >
       <View style={styles.container}>
-        {!open && (
-          <TouchableOpacity
-            onPress={() => setOpen(true)}
-            style={styles.burgerButton}
-          >
-            <FontAwesome name="bars" size={24} color="black" />
-          </TouchableOpacity>
-        )}
+        <DrawerTabHeader
+          title="LOMA Chat"
+          onMenuPress={() => setOpen(true)}
+          isDrawerOpen={open}
+        />
         {activeChat && (
-          <Chat
+          <ChatComponent
             key={activeChat.id}
             activeChat={activeChat}
             messages={activeChat.messages}
@@ -135,12 +132,5 @@ export default function ChatScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-  },
-  burgerButton: {
-    position: "absolute",
-    top: 10,
-    left: 10,
-    zIndex: 1,
-    padding: 10,
   },
 });
