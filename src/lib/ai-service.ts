@@ -28,6 +28,9 @@ export interface AIService {
 }
 
 // Factory function to create the appropriate AI service
+import { EmbeddingService, TransformersEmbeddingService } from './embedding-service';
+
+// Factory function to create the appropriate AI service
 export async function createAIService(): Promise<AIService> {
   if (Platform.OS === 'web') {
     const { TransformersAIService } = await import('./transformers-ai-service');
@@ -36,4 +39,9 @@ export async function createAIService(): Promise<AIService> {
     const { LlamaAIService } = await import('./llama-ai-service');
     return new LlamaAIService();
   }
+}
+
+export async function createEmbeddingService(): Promise<EmbeddingService> {
+  // For now, only transformers is supported
+  return new TransformersEmbeddingService();
 }

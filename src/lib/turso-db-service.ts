@@ -7,6 +7,8 @@
 
 import { Platform } from 'react-native';
 
+import { EmbeddingService, createEmbeddingService } from './embedding-service';
+
 // Configuration constants
 const DB_NAME = 'loma_vector_db.db';
 const DB_LOCATION = 'default';
@@ -114,6 +116,7 @@ if (Platform.OS !== 'web') {
 export class TursoDBService {
   /** SQLite database connection */
   private db: SQLiteDatabase | null = null;
+  private embeddingService: EmbeddingService | null = null;
   /** Flag indicating if the service is initialized */
   private isInitialized = false;
 
@@ -142,6 +145,9 @@ export class TursoDBService {
 
     try {
       console.log('Initializing Turso DB service...');
+
+      this.embeddingService = await createEmbeddingService();
+      await this.embeddingService.initialize();
       
       // Open local SQLite database with libSQL support
       this.db = open({
@@ -271,7 +277,7 @@ export class TursoDBService {
           id: 'doc1',
           title: 'Cardiovascular Disease Prevention and Management',
           content: 'Cardiovascular disease remains the leading cause of death globally. Prevention strategies include lifestyle modifications such as regular exercise, healthy diet, smoking cessation, and blood pressure management. Early detection through screening and appropriate medical intervention can significantly reduce mortality rates.',
-          vector: this.generateMockEmbedding([0.1, 0.2, 0.3, 0.4]),
+          vector: await this.generateEmbedding('Cardiovascular disease remains the leading cause of death globally. Prevention strategies include lifestyle modifications such as regular exercise, healthy diet, smoking cessation, and blood pressure management. Early detection through screening and appropriate medical intervention can significantly reduce mortality rates.'),
           created_at: new Date().toISOString(),
           year: 2023,
           specialty: 'Cardiology'
@@ -280,7 +286,7 @@ export class TursoDBService {
           id: 'doc2',
           title: 'Cancer Immunotherapy: Recent Advances and Future Directions',
           content: 'Immunotherapy has revolutionized cancer treatment by harnessing the body\'s immune system to fight cancer cells. Checkpoint inhibitors, CAR-T cell therapy, and cancer vaccines represent major breakthroughs in oncology. These treatments have shown remarkable success in various cancer types including melanoma, lung cancer, and hematological malignancies.',
-          vector: this.generateMockEmbedding([0.2, 0.3, 0.4, 0.5]),
+          vector: await this.generateEmbedding('Immunotherapy has revolutionized cancer treatment by harnessing the body\'s immune system to fight cancer cells. Checkpoint inhibitors, CAR-T cell therapy, and cancer vaccines represent major breakthroughs in oncology. These treatments have shown remarkable success in various cancer types including melanoma, lung cancer, and hematological malignancies.'),
           created_at: new Date().toISOString(),
           year: 2024,
           specialty: 'Oncology'
@@ -289,7 +295,7 @@ export class TursoDBService {
           id: 'doc3',
           title: 'Diabetes Management in the Digital Age',
           content: 'Type 2 diabetes management has been transformed by continuous glucose monitoring, insulin pumps, and mobile health applications. These technologies enable better glycemic control, reduce complications, and improve quality of life for patients. Telemedicine has also expanded access to specialized diabetes care.',
-          vector: this.generateMockEmbedding([0.3, 0.4, 0.5, 0.6]),
+          vector: await this.generateEmbedding('Type 2 diabetes management has been transformed by continuous glucose monitoring, insulin pumps, and mobile health applications. These technologies enable better glycemic control, reduce complications, and improve quality of life for patients. Telemedicine has also expanded access to specialized diabetes care.'),
           created_at: new Date().toISOString(),
           year: 2023,
           specialty: 'Endocrinology'
@@ -298,7 +304,7 @@ export class TursoDBService {
           id: 'doc4',
           title: 'Mental Health in Primary Care Settings',
           content: 'Integration of mental health services in primary care has improved access to psychological support. Screening tools for depression and anxiety, brief interventions, and collaborative care models have proven effective. Training primary care providers in mental health assessment and treatment is crucial for comprehensive patient care.',
-          vector: this.generateMockEmbedding([0.4, 0.5, 0.6, 0.7]),
+          vector: await this.generateEmbedding('Integration of mental health services in primary care has improved access to psychological support. Screening tools for depression and anxiety, brief interventions, and collaborative care models have proven effective. Training primary care providers in mental health assessment and treatment is crucial for comprehensive patient care.'),
           created_at: new Date().toISOString(),
           year: 2024,
           specialty: 'Psychiatry'
@@ -307,7 +313,7 @@ export class TursoDBService {
           id: 'doc5',
           title: 'Antibiotic Resistance: A Global Health Challenge',
           content: 'Antimicrobial resistance poses a significant threat to global health security. Inappropriate antibiotic use, inadequate infection control, and lack of new drug development contribute to this crisis. Stewardship programs, rapid diagnostic tests, and international cooperation are essential to combat resistance.',
-          vector: this.generateMockEmbedding([0.5, 0.6, 0.7, 0.8]),
+          vector: await this.generateEmbedding('Antimicrobial resistance poses a significant threat to global health security. Inappropriate antibiotic use, inadequate infection control, and lack of new drug development contribute to this crisis. Stewardship programs, rapid diagnostic tests, and international cooperation are essential to combat resistance.'),
           created_at: new Date().toISOString(),
           year: 2023,
           specialty: 'Infectious Disease'
@@ -320,35 +326,34 @@ export class TursoDBService {
           id: 'qa1',
           question: 'What are the main risk factors for cardiovascular disease?',
           answer: 'The main risk factors include hypertension, high cholesterol, diabetes, smoking, obesity, sedentary lifestyle, family history, and age. Many of these are modifiable through lifestyle changes and medical management.',
-          vector: this.generateMockEmbedding([0.1, 0.3, 0.5, 0.2]),
+          vector: await this.generateEmbedding('What are the main risk factors for cardiovascular disease?'),
           document_id: 'doc1'
         },
         {
           id: 'qa2',
           question: 'How do checkpoint inhibitors work in cancer treatment?',
           answer: 'Checkpoint inhibitors block proteins that prevent immune cells from attacking cancer cells. By removing these "brakes" on the immune system, T-cells can better recognize and destroy cancer cells. Common targets include PD-1, PD-L1, and CTLA-4.',
-          vector: this.generateMockEmbedding([0.2, 0.4, 0.6, 0.3]),
           document_id: 'doc2'
         },
         {
           id: 'qa3',
           question: 'What is the target HbA1c level for most diabetic patients?',
           answer: 'For most adults with diabetes, the target HbA1c level is less than 7%. However, individualized targets may vary based on age, comorbidities, life expectancy, and risk of hypoglycemia. Some patients may have targets of 6.5% or 8% depending on their specific circumstances.',
-          vector: this.generateMockEmbedding([0.3, 0.5, 0.7, 0.4]),
+          vector: await this.generateEmbedding('What is the target HbA1c level for most diabetic patients?'),
           document_id: 'doc3'
         },
         {
           id: 'qa4',
           question: 'What screening tools are commonly used for depression in primary care?',
           answer: 'The PHQ-9 (Patient Health Questionnaire-9) and PHQ-2 are widely used screening tools. The GAD-7 is used for anxiety screening. These validated instruments help identify patients who may benefit from further mental health evaluation and treatment.',
-          vector: this.generateMockEmbedding([0.4, 0.6, 0.8, 0.5]),
+          vector: await this.generateEmbedding('What screening tools are commonly used for depression in primary care?'),
           document_id: 'doc4'
         },
         {
           id: 'qa5',
           question: 'What is antibiotic stewardship and why is it important?',
           answer: 'Antibiotic stewardship involves coordinated interventions to improve antibiotic use, including prescribing the right drug, dose, and duration. It\'s crucial for reducing resistance, minimizing adverse effects, decreasing healthcare costs, and preserving antibiotic effectiveness for future generations.',
-          vector: this.generateMockEmbedding([0.5, 0.7, 0.9, 0.6]),
+          vector: await this.generateEmbedding('What is antibiotic stewardship and why is it important?'),
           document_id: 'doc5'
         }
       ];
@@ -395,19 +400,12 @@ export class TursoDBService {
    * @param base - Base values to use for generating the embedding
    * @returns A vector of specified dimension with values derived from the base
    */
-  private generateMockEmbedding(base: number[]): number[] {
-    if (!base || base.length === 0) {
-      throw new Error('Base values are required for generating mock embeddings');
+  private async generateEmbedding(text: string): Promise<number[]> {
+    if (!this.embeddingService) {
+      throw new Error('Embedding service not initialized');
     }
-    
-    // Generate an embedding with the configured dimension
-    const embedding = new Array(EMBEDDING_DIMENSION);
-    for (let i = 0; i < EMBEDDING_DIMENSION; i++) {
-      const baseIndex = i % base.length;
-      // Add small random variations to create unique but related vectors
-      embedding[i] = base[baseIndex] + (Math.random() - 0.5) * 0.1;
-    }
-    return embedding;
+    const embedding = await this.embeddingService.embed(text);
+    return Array.from(embedding);
   }
 
   /**
@@ -575,7 +573,7 @@ export class TursoDBService {
       const threshold = options.threshold || DEFAULT_SIMILARITY_THRESHOLD;
 
       console.log(`Generating embedding for medical document query: "${options.query}"`);
-      const queryEmbedding = this.generateMockEmbedding([0.3, 0.5, 0.7, 0.2]);
+      const queryEmbedding = await this.generateEmbedding(options.query);
       const queryVectorStr = this.toVector(queryEmbedding);
 
       // Build WHERE clause for additional filters
@@ -740,7 +738,7 @@ export class TursoDBService {
       const threshold = options.threshold || DEFAULT_SIMILARITY_THRESHOLD;
 
       console.log(`Generating embedding for medical Q&A query: "${options.query}"`);
-      const queryEmbedding = this.generateMockEmbedding([0.4, 0.6, 0.8, 0.3]);
+      const queryEmbedding = await this.generateEmbedding(options.query);
       const queryVectorStr = this.toVector(queryEmbedding);
 
       const result = await this.db.execute(`
