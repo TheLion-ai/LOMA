@@ -1,18 +1,29 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, ScrollView, Alert, Platform, StyleSheet } from 'react-native';
-import { getTursoDBService, VectorDocument, VectorSearchResult } from '../lib/turso-db-service';
-import { Button } from './ui/button';
-import { Card, CardHeader, CardTitle, CardContent } from './ui/card';
-import { Input } from './ui/input';
+import React, { useState, useEffect } from "react";
+import {
+  View,
+  Text,
+  ScrollView,
+  Alert,
+  Platform,
+  StyleSheet,
+} from "react-native";
+import {
+  getTursoDBService,
+  VectorDocument,
+  VectorSearchResult,
+} from "../lib/turso-db-service";
+import { Button } from "./ui/button";
+import { Card, CardHeader, CardTitle, CardContent } from "./ui/card";
+import { Input } from "./ui/input";
 
 export function VectorDBDemo() {
   const [isInitialized, setIsInitialized] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
-  const [searchQuery, setSearchQuery] = useState('');
+  const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState<VectorSearchResult[]>([]);
   const [allDocuments, setAllDocuments] = useState<VectorDocument[]>([]);
   const [documentCount, setDocumentCount] = useState(0);
-  const [newDocContent, setNewDocContent] = useState('');
+  const [newDocContent, setNewDocContent] = useState("");
 
   const tursoService = getTursoDBService();
 
@@ -24,8 +35,8 @@ export function VectorDBDemo() {
   }, []);
 
   const initializeDatabase = async () => {
-    if (Platform.OS === 'web') {
-      Alert.alert('Not Available', 'Turso DB is not available on web platform');
+    if (Platform.OS === "web") {
+      Alert.alert("Not Available", "Turso DB is not available on web platform");
       return;
     }
 
@@ -36,8 +47,8 @@ export function VectorDBDemo() {
       await loadDocuments();
       await updateDocumentCount();
     } catch (error) {
-      console.error('Failed to initialize database:', error);
-      Alert.alert('Error', 'Failed to initialize vector database');
+      console.error("Failed to initialize database:", error);
+      Alert.alert("Error", "Failed to initialize vector database");
     } finally {
       setIsLoading(false);
     }
@@ -48,7 +59,7 @@ export function VectorDBDemo() {
       const docs = await tursoService.getAllDocuments();
       setAllDocuments(docs);
     } catch (error) {
-      console.error('Failed to load documents:', error);
+      console.error("Failed to load documents:", error);
     }
   };
 
@@ -57,13 +68,13 @@ export function VectorDBDemo() {
       const count = await tursoService.getDocumentCount();
       setDocumentCount(count);
     } catch (error) {
-      console.error('Failed to get document count:', error);
+      console.error("Failed to get document count:", error);
     }
   };
 
   const handleSearch = async () => {
     if (!searchQuery.trim()) {
-      Alert.alert('Error', 'Please enter a search query');
+      Alert.alert("Error", "Please enter a search query");
       return;
     }
 
@@ -72,12 +83,12 @@ export function VectorDBDemo() {
       const results = await tursoService.searchSimilar({
         query: searchQuery,
         limit: 5,
-        threshold: 0.1 // Lower threshold for demo purposes
+        threshold: 0.1, // Lower threshold for demo purposes
       });
       setSearchResults(results);
     } catch (error) {
-      console.error('Search failed:', error);
-      Alert.alert('Error', 'Search failed');
+      console.error("Search failed:", error);
+      Alert.alert("Error", "Search failed");
     } finally {
       setIsLoading(false);
     }
@@ -85,7 +96,7 @@ export function VectorDBDemo() {
 
   const handleAddDocument = async () => {
     if (!newDocContent.trim()) {
-      Alert.alert('Error', 'Please enter document content');
+      Alert.alert("Error", "Please enter document content");
       return;
     }
 
@@ -94,20 +105,16 @@ export function VectorDBDemo() {
       const newDoc: VectorDocument = {
         id: `doc_${Date.now()}`,
         content: newDocContent,
-        metadata: {
-          category: 'user_generated',
-          timestamp: new Date().toISOString()
-        }
       };
 
       await tursoService.addDocument(newDoc);
-      setNewDocContent('');
+      setNewDocContent("");
       await loadDocuments();
       await updateDocumentCount();
-      Alert.alert('Success', 'Document added successfully');
+      Alert.alert("Success", "Document added successfully");
     } catch (error) {
-      console.error('Failed to add document:', error);
-      Alert.alert('Error', 'Failed to add document');
+      console.error("Failed to add document:", error);
+      Alert.alert("Error", "Failed to add document");
     } finally {
       setIsLoading(false);
     }
@@ -115,38 +122,34 @@ export function VectorDBDemo() {
 
   const handleDeleteDocument = async (id: string) => {
     Alert.alert(
-      'Confirm Delete',
-      'Are you sure you want to delete this document?',
+      "Confirm Delete",
+      "Are you sure you want to delete this document?",
       [
-        { text: 'Cancel', style: 'cancel' },
+        { text: "Cancel", style: "cancel" },
         {
-          text: 'Delete',
-          style: 'destructive',
+          text: "Delete",
+          style: "destructive",
           onPress: async () => {
             try {
               await tursoService.deleteDocument(id);
               await loadDocuments();
               await updateDocumentCount();
-              Alert.alert('Success', 'Document deleted successfully');
+              Alert.alert("Success", "Document deleted successfully");
             } catch (error) {
-              console.error('Failed to delete document:', error);
-              Alert.alert('Error', 'Failed to delete document');
+              console.error("Failed to delete document:", error);
+              Alert.alert("Error", "Failed to delete document");
             }
-          }
-        }
+          },
+        },
       ]
     );
   };
 
-  if (Platform.OS === 'web') {
+  if (Platform.OS === "web") {
     return (
       <View style={styles.container}>
-        <Text style={styles.title}>
-          Vector Database Demo
-        </Text>
-        <Text style={styles.subtitle}>
-          Not available on web platform
-        </Text>
+        <Text style={styles.title}>Vector Database Demo</Text>
+        <Text style={styles.subtitle}>Not available on web platform</Text>
       </View>
     );
   }
@@ -155,7 +158,9 @@ export function VectorDBDemo() {
     return (
       <View style={styles.container}>
         <Text style={styles.title}>
-          {isLoading ? 'Initializing Vector Database...' : 'Vector Database Demo'}
+          {isLoading
+            ? "Initializing Vector Database..."
+            : "Vector Database Demo"}
         </Text>
         {isLoading && (
           <Text style={styles.subtitle}>
@@ -168,10 +173,8 @@ export function VectorDBDemo() {
 
   return (
     <ScrollView style={styles.scrollContainer}>
-      <Text style={styles.mainTitle}>
-        🗄️ Vector Database Demo
-      </Text>
-      
+      <Text style={styles.mainTitle}>🗄️ Vector Database Demo</Text>
+
       <Text style={styles.subtitle}>
         Powered by Turso DB with libSQL Vector Search
       </Text>
@@ -185,7 +188,9 @@ export function VectorDBDemo() {
         </CardHeader>
         <CardContent>
           <Text style={styles.text}>Total Documents: {documentCount}</Text>
-          <Text style={styles.text}>Status: {tursoService.isReady() ? '✅ Ready' : '❌ Not Ready'}</Text>
+          <Text style={styles.text}>
+            Status: {tursoService.isReady() ? "✅ Ready" : "❌ Not Ready"}
+          </Text>
         </CardContent>
       </Card>
 
@@ -210,7 +215,7 @@ export function VectorDBDemo() {
             disabled={isLoading}
             style={styles.button}
           >
-            {isLoading ? 'Searching...' : 'Search Similar Documents'}
+            {isLoading ? "Searching..." : "Search Similar Documents"}
           </Button>
 
           {/* Search Results */}
@@ -220,11 +225,16 @@ export function VectorDBDemo() {
               {searchResults.map((result, index) => (
                 <Card key={result.document.id} style={styles.resultItem}>
                   <CardContent>
-                    <Text style={styles.resultHeader}>#{index + 1} (Similarity: {(result.similarity * 100).toFixed(1)}%)</Text>
-                    <Text style={styles.resultContent}>{result.document.content}</Text>
-                    {result.document.metadata && (
+                    <Text style={styles.resultHeader}>
+                      #{index + 1} (Similarity:{" "}
+                      {(result.similarity * 100).toFixed(1)}%)
+                    </Text>
+                    <Text style={styles.resultContent}>
+                      {result.document.content}
+                    </Text>
+                    {result.document.specialty && (
                       <Text style={styles.resultMeta}>
-                        Category: {result.document.metadata.category}
+                        Specialty: {result.document.specialty}
                       </Text>
                     )}
                   </CardContent>
@@ -244,7 +254,10 @@ export function VectorDBDemo() {
         </CardHeader>
         <CardContent>
           <Input
-            style={StyleSheet.flatten([styles.textInput, styles.multilineInput])}
+            style={StyleSheet.flatten([
+              styles.textInput,
+              styles.multilineInput,
+            ])}
             placeholder="Enter document content..."
             value={newDocContent}
             onChangeText={setNewDocContent}
@@ -257,7 +270,7 @@ export function VectorDBDemo() {
             disabled={isLoading}
             style={styles.button}
           >
-            {isLoading ? 'Adding...' : 'Add Document'}
+            {isLoading ? "Adding..." : "Add Document"}
           </Button>
         </CardContent>
       </Card>
@@ -275,11 +288,13 @@ export function VectorDBDemo() {
               <CardContent>
                 <View style={styles.documentContent}>
                   <View style={styles.documentInfo}>
-                    <Text style={styles.documentTitle}>Document #{index + 1}</Text>
+                    <Text style={styles.documentTitle}>
+                      Document #{index + 1}
+                    </Text>
                     <Text style={styles.documentText}>{doc.content}</Text>
-                    {doc.metadata && (
+                    {doc.specialty && (
                       <Text style={styles.documentMeta}>
-                        Category: {doc.metadata.category}
+                        Specialty: {doc.specialty}
                       </Text>
                     )}
                   </View>
@@ -311,48 +326,48 @@ const styles = StyleSheet.create({
   },
   title: {
     fontSize: 18,
-    fontWeight: 'bold',
-    textAlign: 'center',
-    color: '#6B7280',
+    fontWeight: "bold",
+    textAlign: "center",
+    color: "#6B7280",
   },
   mainTitle: {
     fontSize: 24,
-    fontWeight: 'bold',
-    textAlign: 'center',
+    fontWeight: "bold",
+    textAlign: "center",
     marginBottom: 16,
   },
   subtitle: {
-    textAlign: 'center',
-    color: '#6B7280',
+    textAlign: "center",
+    color: "#6B7280",
     marginTop: 8,
     marginBottom: 24,
   },
   statsContainer: {
-    backgroundColor: '#EBF8FF',
+    backgroundColor: "#EBF8FF",
     padding: 16,
     borderRadius: 8,
     marginBottom: 24,
   },
   sectionContainer: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: "#FFFFFF",
     padding: 16,
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: '#E5E7EB',
+    borderColor: "#E5E7EB",
     marginBottom: 24,
   },
   sectionTitle: {
     fontSize: 18,
-    fontWeight: '600',
+    fontWeight: "600",
     marginBottom: 12,
   },
   text: {
-    color: '#374151',
+    color: "#374151",
     marginBottom: 4,
   },
   textInput: {
     borderWidth: 1,
-    borderColor: '#D1D5DB',
+    borderColor: "#D1D5DB",
     borderRadius: 8,
     padding: 12,
     marginBottom: 12,
@@ -363,81 +378,81 @@ const styles = StyleSheet.create({
   button: {
     padding: 12,
     borderRadius: 8,
-    alignItems: 'center',
+    alignItems: "center",
   },
   buttonPrimary: {
-    backgroundColor: '#3B82F6',
+    backgroundColor: "#3B82F6",
   },
   buttonSuccess: {
-    backgroundColor: '#10B981',
+    backgroundColor: "#10B981",
   },
   buttonDisabled: {
-    backgroundColor: '#9CA3AF',
+    backgroundColor: "#9CA3AF",
   },
   buttonText: {
-    color: '#FFFFFF',
-    fontWeight: '600',
+    color: "#FFFFFF",
+    fontWeight: "600",
   },
   resultsContainer: {
     marginTop: 16,
   },
   resultsTitle: {
-    fontWeight: '600',
+    fontWeight: "600",
     marginBottom: 8,
   },
   resultItem: {
-    backgroundColor: '#F9FAFB',
+    backgroundColor: "#F9FAFB",
     padding: 12,
     borderRadius: 8,
     marginBottom: 8,
   },
   resultHeader: {
-    fontWeight: '500',
+    fontWeight: "500",
   },
   resultContent: {
-    color: '#374151',
+    color: "#374151",
     marginTop: 4,
   },
   resultMeta: {
     fontSize: 12,
-    color: '#6B7280',
+    color: "#6B7280",
     marginTop: 4,
   },
   documentItem: {
-    backgroundColor: '#F9FAFB',
+    backgroundColor: "#F9FAFB",
     padding: 12,
     borderRadius: 8,
     marginBottom: 8,
   },
   documentContent: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "flex-start",
   },
   documentInfo: {
     flex: 1,
   },
   documentTitle: {
-    fontWeight: '500',
+    fontWeight: "500",
   },
   documentText: {
-    color: '#374151',
+    color: "#374151",
     marginTop: 4,
   },
   documentMeta: {
     fontSize: 12,
-    color: '#6B7280',
+    color: "#6B7280",
     marginTop: 4,
   },
   deleteButton: {
-    backgroundColor: '#EF4444',
+    backgroundColor: "#EF4444",
     paddingHorizontal: 12,
     paddingVertical: 4,
     borderRadius: 4,
     marginLeft: 8,
   },
   deleteButtonText: {
-    color: '#FFFFFF',
+    color: "#FFFFFF",
     fontSize: 12,
   },
 });
