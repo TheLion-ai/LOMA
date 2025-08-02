@@ -1,53 +1,93 @@
 /**
- * @file turso-db-service.ts
- * @description Vector database service using Turso/libSQL for semantic search capabilities
- * This service provides vector storage and similarity search functionality for AI applications
- * using OP-SQLite with libSQL extensions for vector operations.
+ * Medical Vector Database Service using Turso/libSQL
+ * 
+ * Provides comprehensive vector database functionality for medical AI applications,
+ * including storage and similarity search for medical documents and Q&A pairs.
  */
 
 import { Platform } from 'react-native';
+import { useTextEmbeddings } from 'react-native-executorch';
+import { queuedEmbeddingService } from './embedding-service';
 
 // Configuration constants
 const DB_NAME = 'loma_vector_db.db';
 const DB_LOCATION = 'default';
 const EMBEDDING_DIMENSION = 384; // Standard dimension for sentence transformers
 const DEFAULT_SEARCH_LIMIT = 5;
+// For normalized embeddings, cosine distance ranges 0-2, so similarity ranges 1 to -1
+// A threshold of 0.7 means we want documents with >70% similarity
 const DEFAULT_SIMILARITY_THRESHOLD = 0.7;
 
 /**
- * Represents a document with vector embedding for semantic search
+ * Represents a medical research document with vector embedding for semantic search
  */
-export interface VectorDocument {
+export interface MedicalDocument {
   /** Unique identifier for the document */
   id: string;
-  /** Text content of the document */
+  /** Title of the document */
+  title: string;
+  /** Full content of the document */
   content: string;
-  /** Optional metadata as key-value pairs */
-  metadata?: Record<string, any>;
   /** Vector embedding representation of the document content */
-  embedding?: number[];
+  vector: number[];
+  /** Timestamp when record was created */
+  created_at: string;
+  /** Publication year (optional) */
+  year?: number;
+  /** Medical specialty (optional) */
+  specialty?: string;
 }
 
 /**
- * Result of a vector similarity search operation
+ * Represents a medical Q&A pair with vector embedding for semantic search
  */
-export interface VectorSearchResult {
+export interface MedicalQA {
+  /** Unique identifier for the Q&A pair */
+  id: string;
+  /** Medical question */
+  question: string;
+  /** Corresponding answer */
+  answer: string;
+  /** Vector embedding representation of the question */
+  vector: number[];
+  /** Reference to source document */
+  document_id: string;
+}
+
+/**
+ * Result of a vector similarity search operation for documents
+ */
+export interface DocumentSearchResult {
   /** The matched document */
-  document: VectorDocument;
-  /** Similarity score between 0 and 1, where 1 is most similar */
+  document: MedicalDocument;
+  /** Similarity score between -1 and 1, where 1 is identical, 0 is orthogonal, -1 is opposite */
   similarity: number;
 }
 
 /**
- * Options for vector similarity search
+ * Result of a vector similarity search operation for Q&A
  */
-export interface VectorSearchOptions {
+export interface QASearchResult {
+  /** The matched Q&A pair */
+  qa: MedicalQA;
+  /** Similarity score between -1 and 1, where 1 is identical, 0 is orthogonal, -1 is opposite */
+  similarity: number;
+}
+
+/**
+ * Options for medical document search
+ */
+export interface MedicalSearchOptions {
   /** The search query text */
   query: string;
   /** Maximum number of results to return (default: 5) */
   limit?: number;
-  /** Minimum similarity threshold between 0 and 1 (default: 0.7) */
+  /** Minimum similarity threshold between -1 and 1 (default: 0.7) */
   threshold?: number;
+  /** Filter by medical specialty */
+  specialty?: string;
+  /** Filter by publication year */
+  year?: number;
 }
 
 // Type definition for OP-SQLite database connection
@@ -80,6 +120,76 @@ export class TursoDBService {
   private db: SQLiteDatabase | null = null;
   /** Flag indicating if the service is initialized */
   private isInitialized = false;
+  /** Embedding model for generating text embeddings */
+  private embeddingModel: ReturnType<typeof useTextEmbeddings> | null = null;
+
+  /**
+   * Sets the embedding model to use for generating text embeddings
+   * @param model - The embedding model from useTextEmbeddings hook
+   */
+  setEmbeddingModel(model: ReturnType<typeof useTextEmbeddings>): void {
+    this.embeddingModel = model;
+    queuedEmbeddingService.setModel(model);
+    console.log('Embedding model set for TursoDBService');
+    
+    // Try to insert example documents if the database is initialized but empty
+    this.tryInsertExampleDocuments();
+  }
+
+  /**
+   * Attempts to insert example documents if the embedding model is ready
+   * @private
+   */
+  private async tryInsertExampleDocuments(): Promise<void> {
+    if (!this.isInitialized || !this.embeddingModel?.isReady) {
+      return;
+    }
+
+    try {
+      await this.insertExampleDocuments();
+    } catch (error) {
+      console.error('Failed to insert example documents after model ready:', error);
+    }
+  }
+
+  /**
+   * Manually triggers example document insertion
+   * Useful when the embedding model becomes ready after database initialization
+   * @returns Promise that resolves when insertion is complete
+   */
+  async insertExampleDocumentsIfNeeded(): Promise<void> {
+    if (!this.isInitialized) {
+      throw new Error('Database not initialized');
+    }
+
+    if (!this.embeddingModel?.isReady) {
+      throw new Error('Embedding model not ready');
+    }
+
+    await this.insertExampleDocuments();
+  }
+
+  /**
+   * Debug method to check what documents are in the database
+   * @returns Promise that resolves to document information
+   */
+  async debugDocuments(): Promise<void> {
+    if (!this.isInitialized || !this.db) {
+      throw new Error('Database not initialized');
+    }
+
+    try {
+      const result = await this.db.execute('SELECT id, title, specialty FROM documents');
+      console.log('Documents in database:');
+      if (result.rows) {
+        for (const row of result.rows) {
+          console.log(`- ${row.id}: ${row.title} (${row.specialty})`);
+        }
+      }
+    } catch (error) {
+      console.error('Error debugging documents:', error);
+    }
+  }
 
   /**
    * Initializes the database service
@@ -142,33 +252,66 @@ export class TursoDBService {
     }
 
     try {
-      // Drop existing tables to ensure clean schema
+      // Drop existing tables to ensure clean schema (order matters due to foreign keys)
       try {
+        await this.db.execute('DROP TABLE IF EXISTS medical_qa');
         await this.db.execute('DROP TABLE IF EXISTS documents');
-        console.log('Dropped existing documents table');
+        console.log('Dropped existing tables');
       } catch (dropError) {
-        console.warn('Error dropping table:', dropError);
+        console.warn('Error dropping tables:', dropError);
         // Continue execution - dropping is optional
       }
 
-      // Create documents table with libSQL vector support
+      // Create documents table with new schema
       await this.db.execute(`
-        CREATE TABLE IF NOT EXISTS documents (
+        CREATE TABLE documents (
           id TEXT PRIMARY KEY,
+          title TEXT NOT NULL,
           content TEXT NOT NULL,
-          metadata TEXT,
-          embedding F32_BLOB(${EMBEDDING_DIMENSION}),
-          created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+          vector F32_BLOB(${EMBEDDING_DIMENSION}) NOT NULL,
+          created_at DATETIME NOT NULL,
+          year INTEGER,
+          specialty TEXT
         )
       `);
 
-      // Create vector index for similarity search using libSQL syntax
+      // Create medical_qa table with foreign key reference
       await this.db.execute(`
-        CREATE INDEX IF NOT EXISTS documents_vector_idx 
-        ON documents ( libsql_vector_idx(embedding, 'metric=cosine') )
+        CREATE TABLE medical_qa (
+          id TEXT PRIMARY KEY,
+          question TEXT NOT NULL,
+          answer TEXT NOT NULL,
+          vector F32_BLOB(${EMBEDDING_DIMENSION}) NOT NULL,
+          document_id TEXT NOT NULL,
+          FOREIGN KEY (document_id) REFERENCES documents(id) ON DELETE CASCADE
+        )
       `);
 
-      console.log('Database tables created successfully with vector support');
+      // Create vector indexes for similarity search using libSQL syntax
+      await this.db.execute(`
+        CREATE INDEX IF NOT EXISTS documents_vector_idx 
+        ON documents ( libsql_vector_idx(vector, 'metric=cosine') )
+      `);
+
+      await this.db.execute(`
+        CREATE INDEX IF NOT EXISTS medical_qa_vector_idx 
+        ON medical_qa ( libsql_vector_idx(vector, 'metric=cosine') )
+      `);
+
+      // Create additional indexes for better query performance
+      await this.db.execute(`
+        CREATE INDEX IF NOT EXISTS documents_specialty_idx ON documents(specialty)
+      `);
+
+      await this.db.execute(`
+        CREATE INDEX IF NOT EXISTS documents_year_idx ON documents(year)
+      `);
+
+      await this.db.execute(`
+        CREATE INDEX IF NOT EXISTS medical_qa_document_idx ON medical_qa(document_id)
+      `);
+
+      console.log('Database tables created successfully with new medical schema');
     } catch (error) {
       console.error('Error creating tables:', error);
       throw new Error(`Failed to create database tables: ${error instanceof Error ? error.message : String(error)}`);
@@ -176,7 +319,7 @@ export class TursoDBService {
   }
 
   /**
-   * Inserts example documents with mock embeddings into the database
+   * Inserts example medical documents and Q&A pairs with mock embeddings into the database
    * Only inserts if the database is empty
    * @private
    * @throws Error if document insertion fails
@@ -196,56 +339,124 @@ export class TursoDBService {
         return;
       }
 
-      // Example documents with mock embeddings (in real app, these would be generated by an embedding model)
-      const exampleDocs = [
+      // Check if embedding model is available
+      if (!this.embeddingModel || !this.embeddingModel.isReady) {
+        console.log('Embedding model not ready, skipping example document insertion');
+        return;
+      }
+
+      // Example medical documents with real embeddings
+      const exampleDocs: MedicalDocument[] = [
         {
           id: 'doc1',
-          content: 'React Native is a framework for building mobile applications using React and JavaScript.',
-          metadata: { category: 'technology', topic: 'mobile development' },
-          embedding: this.generateMockEmbedding([0.1, 0.2, 0.3, 0.4])
+          title: 'Cardiovascular Disease Prevention and Management',
+          content: 'Cardiovascular disease remains the leading cause of death globally. Prevention strategies include lifestyle modifications such as regular exercise, healthy diet, smoking cessation, and blood pressure management. Early detection through screening and appropriate medical intervention can significantly reduce mortality rates.',
+          vector: await this.generateEmbedding('Cardiovascular Disease Prevention and Management. Cardiovascular disease remains the leading cause of death globally. Prevention strategies include lifestyle modifications such as regular exercise, healthy diet, smoking cessation, and blood pressure management. Early detection through screening and appropriate medical intervention can significantly reduce mortality rates.'),
+          created_at: new Date().toISOString(),
+          year: 2023,
+          specialty: 'Cardiology'
         },
         {
           id: 'doc2',
-          content: 'Artificial Intelligence and Machine Learning are transforming how we build software applications.',
-          metadata: { category: 'technology', topic: 'AI/ML' },
-          embedding: this.generateMockEmbedding([0.2, 0.3, 0.4, 0.5])
+          title: 'Cancer Immunotherapy: Recent Advances and Future Directions',
+          content: 'Immunotherapy has revolutionized cancer treatment by harnessing the body\'s immune system to fight cancer cells. Checkpoint inhibitors, CAR-T cell therapy, and cancer vaccines represent major breakthroughs in oncology. These treatments have shown remarkable success in various cancer types including melanoma, lung cancer, and hematological malignancies.',
+          vector: await this.generateEmbedding('Cancer Immunotherapy: Recent Advances and Future Directions. Immunotherapy has revolutionized cancer treatment by harnessing the body\'s immune system to fight cancer cells. Checkpoint inhibitors, CAR-T cell therapy, and cancer vaccines represent major breakthroughs in oncology. These treatments have shown remarkable success in various cancer types including melanoma, lung cancer, and hematological malignancies.'),
+          created_at: new Date().toISOString(),
+          year: 2024,
+          specialty: 'Oncology'
         },
         {
           id: 'doc3',
-          content: 'Vector databases enable semantic search and similarity matching for AI applications.',
-          metadata: { category: 'database', topic: 'vector search' },
-          embedding: this.generateMockEmbedding([0.3, 0.4, 0.5, 0.6])
+          title: 'Diabetes Management in the Digital Age',
+          content: 'Type 2 diabetes management has been transformed by continuous glucose monitoring, insulin pumps, and mobile health applications. These technologies enable better glycemic control, reduce complications, and improve quality of life for patients. Telemedicine has also expanded access to specialized diabetes care.',
+          vector: await this.generateEmbedding('Diabetes Management in the Digital Age. Type 2 diabetes management has been transformed by continuous glucose monitoring, insulin pumps, and mobile health applications. These technologies enable better glycemic control, reduce complications, and improve quality of life for patients. Telemedicine has also expanded access to specialized diabetes care.'),
+          created_at: new Date().toISOString(),
+          year: 2023,
+          specialty: 'Endocrinology'
         },
         {
           id: 'doc4',
-          content: 'SQLite is a lightweight, serverless database engine perfect for mobile and embedded applications.',
-          metadata: { category: 'database', topic: 'SQLite' },
-          embedding: this.generateMockEmbedding([0.4, 0.5, 0.6, 0.7])
+          title: 'Mental Health in Primary Care Settings',
+          content: 'Integration of mental health services in primary care has improved access to psychological support. Screening tools for depression and anxiety, brief interventions, and collaborative care models have proven effective. Training primary care providers in mental health assessment and treatment is crucial for comprehensive patient care.',
+          vector: await this.generateEmbedding('Mental Health in Primary Care Settings. Integration of mental health services in primary care has improved access to psychological support. Screening tools for depression and anxiety, brief interventions, and collaborative care models have proven effective. Training primary care providers in mental health assessment and treatment is crucial for comprehensive patient care.'),
+          created_at: new Date().toISOString(),
+          year: 2024,
+          specialty: 'Psychiatry'
         },
         {
           id: 'doc5',
-          content: 'Turso brings the power of SQLite to the cloud with built-in vector search capabilities.',
-          metadata: { category: 'database', topic: 'Turso' },
-          embedding: this.generateMockEmbedding([0.5, 0.6, 0.7, 0.8])
+          title: 'Antibiotic Resistance: A Global Health Challenge',
+          content: 'Antimicrobial resistance poses a significant threat to global health security. Inappropriate antibiotic use, inadequate infection control, and lack of new drug development contribute to this crisis. Stewardship programs, rapid diagnostic tests, and international cooperation are essential to combat resistance.',
+          vector: await this.generateEmbedding('Antibiotic Resistance: A Global Health Challenge. Antimicrobial resistance poses a significant threat to global health security. Inappropriate antibiotic use, inadequate infection control, and lack of new drug development contribute to this crisis. Stewardship programs, rapid diagnostic tests, and international cooperation are essential to combat resistance.'),
+          created_at: new Date().toISOString(),
+          year: 2023,
+          specialty: 'Infectious Disease'
         }
       ];
 
-      // Insert documents in a transaction for better performance and atomicity
+      // Example medical Q&A pairs with real embeddings
+      const exampleQAs: MedicalQA[] = [
+        {
+          id: 'qa1',
+          question: 'What are the main risk factors for cardiovascular disease?',
+          answer: 'The main risk factors include hypertension, high cholesterol, diabetes, smoking, obesity, sedentary lifestyle, family history, and age. Many of these are modifiable through lifestyle changes and medical management.',
+          vector: await this.generateEmbedding('What are the main risk factors for cardiovascular disease? The main risk factors include hypertension, high cholesterol, diabetes, smoking, obesity, sedentary lifestyle, family history, and age. Many of these are modifiable through lifestyle changes and medical management.'),
+          document_id: 'doc1'
+        },
+        {
+          id: 'qa2',
+          question: 'How do checkpoint inhibitors work in cancer treatment?',
+          answer: 'Checkpoint inhibitors block proteins that prevent immune cells from attacking cancer cells. By removing these "brakes" on the immune system, T-cells can better recognize and destroy cancer cells. Common targets include PD-1, PD-L1, and CTLA-4.',
+          vector: await this.generateEmbedding('How do checkpoint inhibitors work in cancer treatment? Checkpoint inhibitors block proteins that prevent immune cells from attacking cancer cells. By removing these "brakes" on the immune system, T-cells can better recognize and destroy cancer cells. Common targets include PD-1, PD-L1, and CTLA-4.'),
+          document_id: 'doc2'
+        },
+        {
+          id: 'qa3',
+          question: 'What is the target HbA1c level for most diabetic patients?',
+          answer: 'For most adults with diabetes, the target HbA1c level is less than 7%. However, individualized targets may vary based on age, comorbidities, life expectancy, and risk of hypoglycemia. Some patients may have targets of 6.5% or 8% depending on their specific circumstances.',
+          vector: await this.generateEmbedding('What is the target HbA1c level for most diabetic patients? For most adults with diabetes, the target HbA1c level is less than 7%. However, individualized targets may vary based on age, comorbidities, life expectancy, and risk of hypoglycemia. Some patients may have targets of 6.5% or 8% depending on their specific circumstances.'),
+          document_id: 'doc3'
+        },
+        {
+          id: 'qa4',
+          question: 'What screening tools are commonly used for depression in primary care?',
+          answer: 'The PHQ-9 (Patient Health Questionnaire-9) and PHQ-2 are widely used screening tools. The GAD-7 is used for anxiety screening. These validated instruments help identify patients who may benefit from further mental health evaluation and treatment.',
+          vector: await this.generateEmbedding('What screening tools are commonly used for depression in primary care? The PHQ-9 (Patient Health Questionnaire-9) and PHQ-2 are widely used screening tools. The GAD-7 is used for anxiety screening. These validated instruments help identify patients who may benefit from further mental health evaluation and treatment.'),
+          document_id: 'doc4'
+        },
+        {
+          id: 'qa5',
+          question: 'What is antibiotic stewardship and why is it important?',
+          answer: 'Antibiotic stewardship involves coordinated interventions to improve antibiotic use, including prescribing the right drug, dose, and duration. It\'s crucial for reducing resistance, minimizing adverse effects, decreasing healthcare costs, and preserving antibiotic effectiveness for future generations.',
+          vector: await this.generateEmbedding('What is antibiotic stewardship and why is it important? Antibiotic stewardship involves coordinated interventions to improve antibiotic use, including prescribing the right drug, dose, and duration. It\'s crucial for reducing resistance, minimizing adverse effects, decreasing healthcare costs, and preserving antibiotic effectiveness for future generations.'),
+          document_id: 'doc5'
+        }
+      ];
+
+      // Insert documents and Q&As in a transaction for better performance and atomicity
       await this.db.execute('BEGIN TRANSACTION');
       
       try {
+        // Insert documents
         for (const doc of exampleDocs) {
-          const metadataStr = JSON.stringify(doc.metadata);
-          // Use vector32() function to properly convert JSON array to F32_BLOB
-          const vectorStr = this.toVector(doc.embedding);
+          const vectorStr = this.toVector(doc.vector);
           await this.db.execute(
-            `INSERT INTO documents (id, content, metadata, embedding) VALUES (?, ?, ?, vector32(?))`,
-            [doc.id, doc.content, metadataStr, vectorStr]
+            `INSERT INTO documents (id, title, content, vector, created_at, year, specialty) VALUES (?, ?, ?, vector32(?), ?, ?, ?)`,
+            [doc.id, doc.title, doc.content, vectorStr, doc.created_at, doc.year, doc.specialty]
+          );
+        }
+
+        // Insert Q&A pairs
+        for (const qa of exampleQAs) {
+          const vectorStr = this.toVector(qa.vector);
+          await this.db.execute(
+            `INSERT INTO medical_qa (id, question, answer, vector, document_id) VALUES (?, ?, ?, vector32(?), ?)`,
+            [qa.id, qa.question, qa.answer, vectorStr, qa.document_id]
           );
         }
         
         await this.db.execute('COMMIT');
-        console.log(`${exampleDocs.length} example documents inserted successfully`);
+        console.log(`${exampleDocs.length} example documents and ${exampleQAs.length} Q&A pairs inserted successfully`);
       } catch (txError) {
         // Rollback on error
         await this.db.execute('ROLLBACK');
@@ -258,25 +469,30 @@ export class TursoDBService {
   }
 
   /**
-   * Generates a mock embedding vector for demonstration purposes
-   * Creates a vector with the specified dimension using base values with small random variations
+   * Generates a real embedding vector using the queued embedding service
    * @private
-   * @param base - Base values to use for generating the embedding
-   * @returns A vector of specified dimension with values derived from the base
+   * @param text - The text to generate an embedding for
+   * @returns A vector of specified dimension
    */
-  private generateMockEmbedding(base: number[]): number[] {
-    if (!base || base.length === 0) {
-      throw new Error('Base values are required for generating mock embeddings');
+  private async generateEmbedding(text: string): Promise<number[]> {
+    if (!text || typeof text !== 'string') {
+      throw new Error('Text input is required for generating embeddings');
     }
-    
-    // Generate an embedding with the configured dimension
-    const embedding = new Array(EMBEDDING_DIMENSION);
-    for (let i = 0; i < EMBEDDING_DIMENSION; i++) {
-      const baseIndex = i % base.length;
-      // Add small random variations to create unique but related vectors
-      embedding[i] = base[baseIndex] + (Math.random() - 0.5) * 0.1;
+
+    if (!this.embeddingModel) {
+      throw new Error('Embedding model is not available');
     }
-    return embedding;
+
+    if (!this.embeddingModel.isReady) {
+      throw new Error('Embedding model is not ready');
+    }
+
+    try {
+      return await queuedEmbeddingService.generateEmbedding(text);
+    } catch (error) {
+      console.error('Failed to generate embedding:', error);
+      throw new Error(`Failed to generate embedding: ${error instanceof Error ? error.message : String(error)}`);
+    }
   }
 
   /**
@@ -303,186 +519,16 @@ export class TursoDBService {
     return JSON.stringify(embedding);
   }
 
-  /**
-   * Adds or updates a document in the vector database
-   * If the document has an embedding, it will be stored for vector search
-   * If no embedding is provided, the document will be stored without vector capabilities
-   * 
-   * @param document - The document to add or update
-   * @throws Error if the database is not initialized or if the document is invalid
-   */
-  async addDocument(document: VectorDocument): Promise<void> {
-    // Validate database connection
-    if (!this.isInitialized || !this.db) {
-      throw new Error('Database not initialized');
-    }
 
-    // Validate document
-    if (!document.id) {
-      throw new Error('Document ID is required');
-    }
-
-    if (!document.content) {
-      throw new Error('Document content is required');
-    }
-
-    try {
-      // Convert metadata to JSON string if present
-      const metadata = document.metadata ? JSON.stringify(document.metadata) : null;
-      
-      if (document.embedding) {
-        // Use vector32() function to properly convert JSON array to F32_BLOB
-        const vectorStr = this.toVector(document.embedding);
-        await this.db.execute(
-          `INSERT OR REPLACE INTO documents (id, content, metadata, embedding) VALUES (?, ?, ?, vector32(?))`,
-          [document.id, document.content, metadata, vectorStr]
-        );
-      } else {
-        // Store document without embedding
-        await this.db.execute(
-          'INSERT OR REPLACE INTO documents (id, content, metadata, embedding) VALUES (?, ?, ?, NULL)',
-          [document.id, document.content, metadata]
-        );
-      }
-
-      console.log(`Document ${document.id} added successfully`);
-    } catch (error) {
-      console.error('Error adding document:', error);
-      throw new Error(`Failed to add document ${document.id}: ${error instanceof Error ? error.message : String(error)}`);
-    }
-  }
 
   /**
-   * Searches for documents similar to the provided query
-   * Uses vector similarity search to find semantically related documents
+   * Deletes a medical document from the database by ID
+   * This will also cascade delete any related Q&A pairs
    * 
-   * @param options - Search options including query text, result limit, and similarity threshold
-   * @returns Array of search results with documents and similarity scores
-   * @throws Error if the database is not initialized or if the search fails
-   */
-  async searchSimilar(options: VectorSearchOptions): Promise<VectorSearchResult[]> {
-    // Validate database connection
-    if (!this.isInitialized || !this.db) {
-      throw new Error('Database not initialized');
-    }
-
-    // Validate search options
-    if (!options.query) {
-      throw new Error('Search query is required');
-    }
-
-    try {
-      // Apply default values if not provided
-      const limit = options.limit || DEFAULT_SEARCH_LIMIT;
-      const threshold = options.threshold || DEFAULT_SIMILARITY_THRESHOLD;
-
-      // In a production app, this would use a real embedding model
-      // For demo purposes, we generate a mock embedding
-      console.log(`Generating embedding for query: "${options.query}"`);
-      const queryEmbedding = this.generateMockEmbedding([0.3, 0.5, 0.7, 0.2]);
-      const queryVectorStr = this.toVector(queryEmbedding);
-
-      // Use libSQL vector_top_k for approximate nearest neighbor search with vector32 function
-      // This performs a cosine similarity search using the vector index
-      const result = await this.db.execute(`
-        SELECT 
-          d.id,
-          d.content,
-          d.metadata,
-          vector_extract(d.embedding) as embedding,
-          vector_distance_cos(d.embedding, vector32(?)) as distance
-        FROM vector_top_k('documents_vector_idx', vector32(?), ${limit}) vtk
-        JOIN documents d ON d.rowid = vtk.id
-      `, [queryVectorStr, queryVectorStr]);
-
-      const searchResults: VectorSearchResult[] = [];
-
-      if (result.rows) {
-        for (const row of result.rows) {
-          // Convert distance to similarity score (cosine distance → similarity)
-          const similarity = 1 - (row.distance || 1); 
-          
-          // Only include results above the threshold
-          if (similarity >= threshold) {
-            try {
-              const document: VectorDocument = {
-                id: row.id,
-                content: row.content,
-                metadata: row.metadata ? JSON.parse(row.metadata) : undefined,
-                embedding: row.embedding ? JSON.parse(row.embedding) : undefined
-              };
-
-              searchResults.push({
-                document,
-                similarity
-              });
-            } catch (parseError) {
-              console.warn(`Error parsing result row for document ${row.id}:`, parseError);
-              // Skip this row but continue processing others
-            }
-          }
-        }
-      }
-
-      console.log(`Found ${searchResults.length} similar documents for query: "${options.query}"`);
-      return searchResults;
-    } catch (error) {
-      console.error('Error searching similar documents:', error);
-      throw new Error(`Failed to search similar documents: ${error instanceof Error ? error.message : String(error)}`);
-    }
-  }
-
-  /**
-   * Retrieves all documents from the database
-   * Includes metadata and vector embeddings if available
-   * 
-   * @returns Array of all documents in the database
-   * @throws Error if the database is not initialized or if retrieval fails
-   */
-  async getAllDocuments(): Promise<VectorDocument[]> {
-    if (!this.isInitialized || !this.db) {
-      throw new Error('Database not initialized');
-    }
-
-    try {
-      // Use vector_extract to get the embedding as a JSON string
-      const result = await this.db.execute(
-        'SELECT id, content, metadata, vector_extract(embedding) as embedding_json FROM documents ORDER BY created_at DESC'
-      );
-      const documents: VectorDocument[] = [];
-
-      if (result.rows) {
-        for (const row of result.rows) {
-          try {
-            const document: VectorDocument = {
-              id: row.id,
-              content: row.content,
-              metadata: row.metadata ? JSON.parse(row.metadata) : undefined,
-              embedding: row.embedding_json ? JSON.parse(row.embedding_json) : undefined
-            };
-            documents.push(document);
-          } catch (parseError) {
-            console.warn(`Error parsing document ${row.id}:`, parseError);
-            // Skip this document but continue processing others
-          }
-        }
-      }
-
-      console.log(`Retrieved ${documents.length} documents from database`);
-      return documents;
-    } catch (error) {
-      console.error('Error getting all documents:', error);
-      throw new Error(`Failed to get all documents: ${error instanceof Error ? error.message : String(error)}`);
-    }
-  }
-
-  /**
-   * Deletes a document from the database by ID
-   * 
-   * @param id - The ID of the document to delete
+   * @param id - The ID of the medical document to delete
    * @throws Error if the database is not initialized or if deletion fails
    */
-  async deleteDocument(id: string): Promise<void> {
+  async deleteMedicalDocument(id: string): Promise<void> {
     if (!this.isInitialized || !this.db) {
       throw new Error('Database not initialized');
     }
@@ -496,35 +542,477 @@ export class TursoDBService {
       const rowsAffected = result.rows?.length || 0;
       
       if (rowsAffected > 0) {
-        console.log(`Document ${id} deleted successfully`);
+        console.log(`Medical document ${id} deleted successfully`);
       } else {
-        console.warn(`No document found with ID ${id} to delete`);
+        console.warn(`No medical document found with ID ${id} to delete`);
       }
     } catch (error) {
-      console.error('Error deleting document:', error);
-      throw new Error(`Failed to delete document ${id}: ${error instanceof Error ? error.message : String(error)}`);
+      console.error('Error deleting medical document:', error);
+      throw new Error(`Failed to delete medical document ${id}: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
 
+
+
   /**
-   * Gets the total number of documents in the database
+   * Gets the total number of medical documents in the database
    * 
-   * @returns The count of documents
-   * @throws Error if the database is not initialized
+   * @returns Promise that resolves to the number of medical documents
+   * @throws Error if the database is not initialized or if the count fails
    */
-  async getDocumentCount(): Promise<number> {
+  async getMedicalDocumentCount(): Promise<number> {
+    // Validate database connection
     if (!this.isInitialized || !this.db) {
       throw new Error('Database not initialized');
     }
 
     try {
+      // Count all medical documents in the database
       const result = await this.db.execute('SELECT COUNT(*) as count FROM documents');
+      
+      // Extract count from the result
       const count = result.rows?.[0]?.count || 0;
+      
+      console.log(`Total medical documents in database: ${count}`);
       return count;
     } catch (error) {
-      console.error('Error getting document count:', error);
-      // Return 0 instead of throwing to make this method more resilient
-      return 0;
+      console.error('Error getting medical document count:', error);
+      throw new Error(`Failed to get medical document count: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  }
+
+  /**
+   * Gets the total number of medical Q&A pairs in the database
+   * 
+   * @returns Promise that resolves to the number of Q&A pairs
+   * @throws Error if the database is not initialized or if the count fails
+   */
+  async getMedicalQACount(): Promise<number> {
+    // Validate database connection
+    if (!this.isInitialized || !this.db) {
+      throw new Error('Database not initialized');
+    }
+
+    try {
+      // Count all Q&A pairs in the database
+      const result = await this.db.execute('SELECT COUNT(*) as count FROM medical_qa');
+      
+      // Extract count from the result
+      const count = result.rows?.[0]?.count || 0;
+      
+      console.log(`Total medical Q&A pairs in database: ${count}`);
+      return count;
+    } catch (error) {
+      console.error('Error getting medical Q&A count:', error);
+      throw new Error(`Failed to get medical Q&A count: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  }
+
+  // ===== MEDICAL DOCUMENT METHODS =====
+
+  /**
+   * Adds or updates a medical document in the database
+   * 
+   * @param document - The medical document to add or update
+   * @throws Error if the database is not initialized or if the document is invalid
+   */
+  async addMedicalDocument(document: MedicalDocument): Promise<void> {
+    if (!this.isInitialized || !this.db) {
+      throw new Error('Database not initialized');
+    }
+
+    if (!document.id || !document.title || !document.content || !document.vector) {
+      throw new Error('Document ID, title, content, and vector are required');
+    }
+
+    try {
+      const vectorStr = this.toVector(document.vector);
+      await this.db.execute(
+        `INSERT OR REPLACE INTO documents (id, title, content, vector, created_at, year, specialty) VALUES (?, ?, ?, vector32(?), ?, ?, ?)`,
+        [document.id, document.title, document.content, vectorStr, document.created_at, document.year, document.specialty]
+      );
+      console.log(`Medical document ${document.id} added successfully`);
+    } catch (error) {
+      console.error('Error adding medical document:', error);
+      throw new Error(`Failed to add medical document ${document.id}: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  }
+
+  /**
+   * Searches for medical documents similar to the provided query
+   * Uses vector similarity search to find semantically related documents
+   * 
+   * @param options - Search options including query text, result limit, similarity threshold, and filters
+   * @returns Array of search results with medical documents and similarity scores
+   * @throws Error if the database is not initialized or if the search fails
+   */
+  async searchMedicalDocuments(options: MedicalSearchOptions): Promise<DocumentSearchResult[]> {
+    if (!this.isInitialized || !this.db) {
+      throw new Error('Database not initialized');
+    }
+
+    if (!options.query) {
+      throw new Error('Search query is required');
+    }
+
+    try {
+      const limit = options.limit || DEFAULT_SEARCH_LIMIT;
+      const threshold = options.threshold || DEFAULT_SIMILARITY_THRESHOLD;
+
+      console.log(`Generating embedding for medical document query: "${options.query}"`);
+      const queryEmbedding = await this.generateEmbedding(options.query);
+      const queryVectorStr = this.toVector(queryEmbedding);
+      
+      // Debug: Check if the query embedding is normalized
+      const queryMagnitude = Math.sqrt(queryEmbedding.reduce((sum, val) => sum + val * val, 0));
+      console.log(`Query embedding magnitude: ${queryMagnitude}`);
+
+      // Build WHERE clause for additional filters
+      let whereClause = '';
+      const params = [queryVectorStr, queryVectorStr];
+      
+      if (options.specialty) {
+        whereClause += ' AND d.specialty = ?';
+        params.push(options.specialty);
+      }
+      
+      if (options.year) {
+        whereClause += ' AND d.year = ?';
+        params.push(options.year.toString());
+      }
+
+      // First, let's check if we have any documents at all
+      const countResult = await this.db.execute('SELECT COUNT(*) as count FROM documents');
+      const docCount = countResult.rows?.[0]?.count || 0;
+      console.log(`Total documents in database: ${docCount}`);
+
+      // Use the proper vector_top_k function for similarity search
+      const result = await this.db.execute(`
+        SELECT 
+          d.id,
+          d.title,
+          d.content,
+          d.created_at,
+          d.year,
+          d.specialty,
+          vector_extract(d.vector) as vector_json,
+          vector_distance_cos(d.vector, vector32(?)) as distance
+        FROM vector_top_k('documents_vector_idx', vector32(?), ${limit}) vtk
+        JOIN documents d ON d.rowid = vtk.id
+        WHERE 1=1${whereClause}
+        ORDER BY distance ASC
+      `, params);
+
+      const searchResults: DocumentSearchResult[] = [];
+
+      if (result.rows) {
+        console.log(`Found ${result.rows.length} raw results from database`);
+        for (const row of result.rows) {
+          const distance = row.distance || 2;
+          // For normalized embeddings with cosine distance:
+          // Distance 0 = identical vectors (similarity = 1.0)
+          // Distance 2 = opposite vectors (similarity = -1.0)
+          // Similarity = 1 - distance (can be negative for very dissimilar vectors)
+          const similarity = 1 - distance;
+          console.log(`Document: ${row.title}, Distance: ${distance}, Similarity: ${similarity.toFixed(4)}, Threshold: ${threshold}`);
+          
+          if (similarity >= threshold) {
+            try {
+              const document: MedicalDocument = {
+                id: row.id,
+                title: row.title,
+                content: row.content,
+                vector: row.vector_json ? JSON.parse(row.vector_json) : [],
+                created_at: row.created_at,
+                year: row.year,
+                specialty: row.specialty
+              };
+
+              searchResults.push({
+                document,
+                similarity
+              });
+            } catch (parseError) {
+              console.warn(`Error parsing medical document result for ${row.id}:`, parseError);
+            }
+          }
+        }
+      }
+
+      console.log(`Found ${searchResults.length} similar medical documents for query: "${options.query}"`);
+      return searchResults;
+    } catch (error) {
+      console.error('Error searching medical documents:', error);
+      throw new Error(`Failed to search medical documents: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  }
+
+  /**
+   * Retrieves all medical documents from the database
+   * 
+   * @returns Array of all medical documents in the database
+   * @throws Error if the database is not initialized or if retrieval fails
+   */
+  async getAllMedicalDocuments(): Promise<MedicalDocument[]> {
+    if (!this.isInitialized || !this.db) {
+      throw new Error('Database not initialized');
+    }
+
+    try {
+      const result = await this.db.execute(
+        'SELECT id, title, content, vector_extract(vector) as vector_json, created_at, year, specialty FROM documents ORDER BY created_at DESC'
+      );
+      const documents: MedicalDocument[] = [];
+
+      if (result.rows) {
+        for (const row of result.rows) {
+          try {
+            const document: MedicalDocument = {
+              id: row.id,
+              title: row.title,
+              content: row.content,
+              vector: row.vector_json ? JSON.parse(row.vector_json) : [],
+              created_at: row.created_at,
+              year: row.year,
+              specialty: row.specialty
+            };
+            documents.push(document);
+          } catch (parseError) {
+            console.warn(`Error parsing medical document ${row.id}:`, parseError);
+          }
+        }
+      }
+
+      console.log(`Retrieved ${documents.length} medical documents from database`);
+      return documents;
+    } catch (error) {
+      console.error('Error getting all medical documents:', error);
+      throw new Error(`Failed to get all medical documents: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  }
+
+  // ===== MEDICAL Q&A METHODS =====
+
+  /**
+   * Adds or updates a medical Q&A pair in the database
+   * 
+   * @param qa - The medical Q&A pair to add or update
+   * @throws Error if the database is not initialized or if the Q&A is invalid
+   */
+  async addMedicalQA(qa: MedicalQA): Promise<void> {
+    if (!this.isInitialized || !this.db) {
+      throw new Error('Database not initialized');
+    }
+
+    if (!qa.id || !qa.question || !qa.answer || !qa.vector || !qa.document_id) {
+      throw new Error('Q&A ID, question, answer, vector, and document_id are required');
+    }
+
+    try {
+      const vectorStr = this.toVector(qa.vector);
+      await this.db.execute(
+        `INSERT OR REPLACE INTO medical_qa (id, question, answer, vector, document_id) VALUES (?, ?, ?, vector32(?), ?)`,
+        [qa.id, qa.question, qa.answer, vectorStr, qa.document_id]
+      );
+      console.log(`Medical Q&A ${qa.id} added successfully`);
+    } catch (error) {
+      console.error('Error adding medical Q&A:', error);
+      throw new Error(`Failed to add medical Q&A ${qa.id}: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  }
+
+  /**
+   * Searches for medical Q&A pairs similar to the provided query
+   * 
+   * @param options - Search options including query text, result limit, and similarity threshold
+   * @returns Array of search results with medical Q&A pairs and similarity scores
+   * @throws Error if the database is not initialized or if the search fails
+   */
+  async searchMedicalQA(options: MedicalSearchOptions): Promise<QASearchResult[]> {
+    if (!this.isInitialized || !this.db) {
+      throw new Error('Database not initialized');
+    }
+
+    if (!options.query) {
+      throw new Error('Search query is required');
+    }
+
+    try {
+      const limit = options.limit || DEFAULT_SEARCH_LIMIT;
+      const threshold = options.threshold || DEFAULT_SIMILARITY_THRESHOLD;
+
+      console.log(`Generating embedding for medical Q&A query: "${options.query}"`);
+      const queryEmbedding = await this.generateEmbedding(options.query);
+      const queryVectorStr = this.toVector(queryEmbedding);
+
+      const result = await this.db.execute(`
+        SELECT 
+          qa.id,
+          qa.question,
+          qa.answer,
+          qa.document_id,
+          vector_extract(qa.vector) as vector_json,
+          vector_distance_cos(qa.vector, vector32(?)) as distance
+        FROM vector_top_k('medical_qa_vector_idx', vector32(?), ${limit}) vtk
+        JOIN medical_qa qa ON qa.rowid = vtk.id
+      `, [queryVectorStr, queryVectorStr]);
+
+      const searchResults: QASearchResult[] = [];
+
+      if (result.rows) {
+        console.log(`Found ${result.rows.length} raw Q&A results from database`);
+        for (const row of result.rows) {
+          const distance = row.distance || 2;
+          // For normalized embeddings: similarity = 1 - distance
+          const similarity = 1 - distance;
+          console.log(`Q&A: ${row.question.substring(0, 50)}..., Distance: ${distance}, Similarity: ${similarity.toFixed(4)}, Threshold: ${threshold}`);
+          
+          if (similarity >= threshold) {
+            try {
+              const qa: MedicalQA = {
+                id: row.id,
+                question: row.question,
+                answer: row.answer,
+                vector: row.vector_json ? JSON.parse(row.vector_json) : [],
+                document_id: row.document_id
+              };
+
+              searchResults.push({
+                qa,
+                similarity
+              });
+            } catch (parseError) {
+              console.warn(`Error parsing medical Q&A result for ${row.id}:`, parseError);
+            }
+          }
+        }
+      }
+
+      console.log(`Found ${searchResults.length} similar medical Q&A pairs for query: "${options.query}"`);
+      return searchResults;
+    } catch (error) {
+      console.error('Error searching medical Q&A:', error);
+      throw new Error(`Failed to search medical Q&A: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  }
+
+  /**
+   * Retrieves all medical Q&A pairs from the database
+   * 
+   * @returns Array of all medical Q&A pairs in the database
+   * @throws Error if the database is not initialized or if retrieval fails
+   */
+  async getAllMedicalQA(): Promise<MedicalQA[]> {
+    if (!this.isInitialized || !this.db) {
+      throw new Error('Database not initialized');
+    }
+
+    try {
+      const result = await this.db.execute(
+        'SELECT id, question, answer, vector_extract(vector) as vector_json, document_id FROM medical_qa ORDER BY id'
+      );
+      const qaList: MedicalQA[] = [];
+
+      if (result.rows) {
+        for (const row of result.rows) {
+          try {
+            const qa: MedicalQA = {
+              id: row.id,
+              question: row.question,
+              answer: row.answer,
+              vector: row.vector_json ? JSON.parse(row.vector_json) : [],
+              document_id: row.document_id
+            };
+            qaList.push(qa);
+          } catch (parseError) {
+            console.warn(`Error parsing medical Q&A ${row.id}:`, parseError);
+          }
+        }
+      }
+
+      console.log(`Retrieved ${qaList.length} medical Q&A pairs from database`);
+      return qaList;
+    } catch (error) {
+      console.error('Error getting all medical Q&A:', error);
+      throw new Error(`Failed to get all medical Q&A: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  }
+
+  /**
+   * Deletes a medical Q&A pair from the database by ID
+   * 
+   * @param id - The ID of the Q&A pair to delete
+   * @throws Error if the database is not initialized or if deletion fails
+   */
+  async deleteMedicalQA(id: string): Promise<void> {
+    if (!this.isInitialized || !this.db) {
+      throw new Error('Database not initialized');
+    }
+
+    if (!id) {
+      throw new Error('Q&A ID is required for deletion');
+    }
+
+    try {
+      const result = await this.db.execute('DELETE FROM medical_qa WHERE id = ?', [id]);
+      const rowsAffected = result.rows?.length || 0;
+      
+      if (rowsAffected > 0) {
+        console.log(`Medical Q&A ${id} deleted successfully`);
+      } else {
+        console.warn(`No medical Q&A found with ID ${id} to delete`);
+      }
+    } catch (error) {
+      console.error('Error deleting medical Q&A:', error);
+      throw new Error(`Failed to delete medical Q&A ${id}: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  }
+
+  /**
+   * Gets Q&A pairs for a specific document
+   * 
+   * @param documentId - The ID of the document
+   * @returns Array of Q&A pairs for the specified document
+   * @throws Error if the database is not initialized
+   */
+  async getQAByDocument(documentId: string): Promise<MedicalQA[]> {
+    if (!this.isInitialized || !this.db) {
+      throw new Error('Database not initialized');
+    }
+
+    if (!documentId) {
+      throw new Error('Document ID is required');
+    }
+
+    try {
+      const result = await this.db.execute(
+        'SELECT id, question, answer, vector_extract(vector) as vector_json, document_id FROM medical_qa WHERE document_id = ? ORDER BY id',
+        [documentId]
+      );
+      const qaList: MedicalQA[] = [];
+
+      if (result.rows) {
+        for (const row of result.rows) {
+          try {
+            const qa: MedicalQA = {
+              id: row.id,
+              question: row.question,
+              answer: row.answer,
+              vector: row.vector_json ? JSON.parse(row.vector_json) : [],
+              document_id: row.document_id
+            };
+            qaList.push(qa);
+          } catch (parseError) {
+            console.warn(`Error parsing medical Q&A ${row.id}:`, parseError);
+          }
+        }
+      }
+
+      console.log(`Retrieved ${qaList.length} Q&A pairs for document ${documentId}`);
+      return qaList;
+    } catch (error) {
+      console.error('Error getting Q&A by document:', error);
+      throw new Error(`Failed to get Q&A for document ${documentId}: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
 
