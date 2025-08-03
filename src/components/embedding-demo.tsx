@@ -15,13 +15,18 @@ import {
   getTursoDBService,
   MedicalSearchOptions,
 } from "../lib/turso-db-service";
+import {
+  performMedicalSearch,
+  formatSearchResultsForDisplay,
+} from "../lib/search-utils";
+import { FormattedResult } from "../types/rag";
 
 /**
  * Demo component showing ExecuTorch embedding integration with TursoDBService
  */
 export default function EmbeddingDemo() {
   const [searchQuery, setSearchQuery] = useState("");
-  const [searchResults, setSearchResults] = useState<any[]>([]);
+  const [searchResults, setSearchResults] = useState<FormattedResult[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [modelStatus, setModelStatus] = useState<string>("Initializing...");
   const [dbStatus, setDbStatus] = useState<string>("Initializing...");
@@ -90,44 +95,26 @@ export default function EmbeddingDemo() {
 
     setIsLoading(true);
     try {
-      const searchOptions: MedicalSearchOptions = {
-        query: searchQuery,
-        limit: 5,
-        threshold: 0.1,
-      };
-
-      console.log("Performing medical document search...");
-      const documentResults = await dbService.searchMedicalDocuments(
-        searchOptions
+      console.log(
+        "🔍 Performing comprehensive medical search using shared utilities..."
       );
 
-      console.log("Performing medical Q&A search...");
-      const qaResults = await dbService.searchMedicalQA(searchOptions);
+      const searchResults = await performMedicalSearch(searchQuery, {
+        limit: 5,
+        threshold: 0.1,
+        includeQA: true,
+      });
 
-      // Combine and format results
-      const combinedResults = [
-        ...documentResults.map((result) => ({
-          type: "Document",
-          title: result.document.title,
-          content: result.document.content,
-          similarity: result.similarity,
-          specialty: result.document.specialty,
-          year: result.document.year,
-        })),
-        ...qaResults.map((result) => ({
-          type: "Q&A",
-          title: result.qa.question,
-          content: result.qa.answer,
-          similarity: result.similarity,
-          specialty: "N/A",
-          year: "N/A",
-        })),
-      ].sort((a, b) => b.similarity - a.similarity);
+      // Format results for display
+      const formattedResults = formatSearchResultsForDisplay(searchResults);
 
-      setSearchResults(combinedResults);
-      console.log(`Found ${combinedResults.length} results`);
+      setSearchResults(formattedResults);
+      console.log(`✅ Found ${formattedResults.length} total results`);
+      console.log(
+        `📊 Search stats: ${searchResults.documents.length} documents, ${searchResults.qaData.length} Q&A pairs`
+      );
     } catch (error) {
-      console.error("Search failed:", error);
+      console.error("❌ Search failed:", error);
       Alert.alert(
         "Search Error",
         error instanceof Error ? error.message : String(error)

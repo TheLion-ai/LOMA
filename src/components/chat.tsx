@@ -13,6 +13,8 @@ import { Separator } from "@/components/ui/separator";
 import { Ionicons } from "@expo/vector-icons";
 import { createAIService, AIService } from "@/lib/ai-service";
 import { ChatMessage, Chat as ChatType } from "@/lib/chat-storage";
+import { getRAGService } from "@/lib/rag-service";
+import { RAGSearchStatus, Source } from "@/types/rag";
 
 interface ChatProps {
   activeChat: ChatType;
@@ -37,6 +39,14 @@ export default function Chat({
   const scrollViewRef = useRef<ScrollView>(null);
   const [dotCount, setDotCount] = useState(1);
 
+  // RAG state
+  const [ragStatus, setRAGStatus] = useState<RAGSearchStatus>({
+    phase: "idle",
+    message: "",
+    isLoading: false,
+  });
+  const [lastSources, setLastSources] = useState<Source[]>([]);
+
   useEffect(() => {
     initializeAI();
 
@@ -51,7 +61,7 @@ export default function Chat({
   useEffect(() => {
     if (isStreaming && !streamingMessage) {
       const interval = setInterval(() => {
-        setDotCount(prev => prev >= 3 ? 1 : prev + 1);
+        setDotCount((prev) => (prev >= 3 ? 1 : prev + 1));
       }, 500);
       return () => clearInterval(interval);
     } else {
@@ -174,6 +184,7 @@ export default function Chat({
       role: "user",
       content: inputText.trim(),
     };
+    const userQuery = inputText.trim();
 
     const newMessages = [...messages, userMessage];
     onMessagesChange(newMessages);
@@ -181,6 +192,7 @@ export default function Chat({
 
     try {
       let responseText: string;
+      let sources: Source[] = [];
 
       setStreamingMessage("");
       setIsStreaming(true);
@@ -200,14 +212,63 @@ export default function Chat({
         responseText =
           mockResponses[Math.floor(Math.random() * mockResponses.length)];
       } else {
-        
-        // Real AI response using the modular service with streaming
+        // RAG-enhanced AI response
+        console.log("🔍 Starting RAG-enhanced response generation...");
+
+        // Phase 1: Search knowledge base
+        setRAGStatus({
+          phase: "searching",
+          message: "Searching medical knowledge base...",
+          isLoading: true,
+        });
+
+        const ragService = getRAGService();
+        let ragResult;
+
+        try {
+          ragResult = await ragService.searchAndEnhanceQuery(userQuery);
+          console.log(
+            `📊 RAG search completed. Success: ${ragResult.success}, Sources: ${ragResult.sources.length}`
+          );
+        } catch (ragError) {
+          console.warn(
+            "⚠️ RAG search failed, continuing with normal chat:",
+            ragError
+          );
+          ragResult = {
+            success: false,
+            searchResults: {
+              documents: [],
+              qaData: [],
+              totalResults: 0,
+              averageSimilarity: 0,
+            },
+            context: "",
+            sources: [],
+            error:
+              ragError instanceof Error ? ragError.message : String(ragError),
+          };
+        }
+
+        // Phase 2: Generate AI response with context
+        setRAGStatus({
+          phase: "processing",
+          message: ragResult.success
+            ? `Found ${ragResult.sources.length} relevant sources. Generating response...`
+            : "No relevant sources found. Generating general response...",
+          isLoading: true,
+        });
+
+        // Prepare messages for AI with context if available
+        const aiMessages = newMessages.map((msg) => ({
+          role: msg.role as "user" | "assistant" | "system",
+          content: msg.content,
+        }));
+
         const result = await aiService.complete({
-          messages: newMessages.map((msg) => ({
-            role: msg.role as "user" | "assistant" | "system",
-            content: msg.content,
-          })),
-          maxTokens: 150,
+          messages: aiMessages,
+          context: ragResult.success ? ragResult.context : undefined,
+          maxTokens: 200, // Increased for context-rich responses
           temperature: 0.6,
           topP: 0.9,
           stopWords: [
@@ -235,13 +296,33 @@ export default function Chat({
         });
 
         responseText = result.text || streamingMessage;
+        sources = ragResult.sources;
 
         // Additional fallback if response is empty
         if (!responseText || responseText.length < 3) {
           responseText =
             "I apologize, but I'm having trouble generating a proper response. Could you please rephrase your question?";
         }
+
+        // Add sources to response if available
+        if (sources.length > 0) {
+          const sourcesText = ragService.formatSourcesForDisplay(sources);
+          responseText += sourcesText;
+        }
       }
+
+      // Update RAG status
+      setRAGStatus({
+        phase: "complete",
+        message:
+          sources.length > 0
+            ? `Response generated with ${sources.length} sources`
+            : "Response generated",
+        isLoading: false,
+      });
+
+      // Store sources for display
+      setLastSources(sources);
 
       const assistantMessage: ChatMessage = {
         role: "assistant",
@@ -254,15 +335,39 @@ export default function Chat({
       if (activeChat.title === "New chat") {
         generateTitle(finalMessages);
       }
+
+      // Reset RAG status after a delay
+      setTimeout(() => {
+        setRAGStatus({
+          phase: "idle",
+          message: "",
+          isLoading: false,
+        });
+      }, 3000);
     } catch (error) {
       console.error("Error generating response:", error);
-      
+
+      setRAGStatus({
+        phase: "error",
+        message: "Error generating response",
+        isLoading: false,
+      });
+
       const errorMessage: ChatMessage = {
         role: "assistant",
         content:
           "Sorry, I encountered an error while processing your message. Please try again.",
       };
       onMessagesChange([...newMessages, errorMessage]);
+
+      // Reset RAG status after error
+      setTimeout(() => {
+        setRAGStatus({
+          phase: "idle",
+          message: "",
+          isLoading: false,
+        });
+      }, 5000);
     } finally {
       cleanupStreamingState();
     }
@@ -368,6 +473,26 @@ export default function Chat({
           </View>
         ))}
 
+        {ragStatus.isLoading && (
+          <View style={styles.messageWrapper}>
+            <View style={[styles.messageRow, styles.assistantRow]}>
+              <View style={[styles.messageContent, styles.assistantContent]}>
+                <View style={styles.avatarContainer}>
+                  <Avatar style={styles.avatar}>
+                    <Ionicons name="search" size={20} color="#8B5CF6" />
+                  </Avatar>
+                </View>
+                <View style={[styles.messageBubble, styles.ragStatusBubble]}>
+                  <Text style={[styles.messageText, styles.ragStatusText]}>
+                    {ragStatus.message}
+                    <Text style={styles.cursor}>▊</Text>
+                  </Text>
+                </View>
+              </View>
+            </View>
+          </View>
+        )}
+
         {isStreaming && (
           <View style={styles.messageWrapper}>
             <View style={[styles.messageRow, styles.assistantRow]}>
@@ -381,7 +506,13 @@ export default function Chat({
                     />
                   </Avatar>
                 </View>
-                <View style={[styles.messageBubble, styles.assistantBubble, styles.streamingBubble]}>
+                <View
+                  style={[
+                    styles.messageBubble,
+                    styles.assistantBubble,
+                    styles.streamingBubble,
+                  ]}
+                >
                   <Text style={[styles.messageText, styles.assistantText]}>
                     {streamingMessage || ".".repeat(dotCount)}
                     {streamingMessage && <Text style={styles.cursor}>▊</Text>}
@@ -391,8 +522,6 @@ export default function Chat({
             </View>
           </View>
         )}
-
-
       </ScrollView>
 
       <Separator />
@@ -563,5 +692,15 @@ const styles = StyleSheet.create({
   },
   sendButtonDisabled: {
     backgroundColor: "#9CA3AF",
+  },
+  ragStatusBubble: {
+    backgroundColor: "#F3E8FF",
+    borderBottomLeftRadius: 4,
+    borderWidth: 1,
+    borderColor: "#C4B5FD",
+  },
+  ragStatusText: {
+    color: "#7C3AED",
+    fontStyle: "italic",
   },
 });
