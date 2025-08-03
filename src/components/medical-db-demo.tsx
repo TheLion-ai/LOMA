@@ -9,21 +9,32 @@ import {
 } from "react-native";
 import {
   getTursoDBService,
-  VectorDocument,
-  VectorSearchResult,
+  MedicalDocument,
+  DocumentSearchResult,
+  QASearchResult,
+  MedicalQA,
 } from "../lib/turso-db-service";
 import { Button } from "./ui/button";
 import { Card, CardHeader, CardTitle, CardContent } from "./ui/card";
 import { Input } from "./ui/input";
 
-export function VectorDBDemo() {
+export function MedicalDBDemo() {
   const [isInitialized, setIsInitialized] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
-  const [searchResults, setSearchResults] = useState<VectorSearchResult[]>([]);
-  const [allDocuments, setAllDocuments] = useState<VectorDocument[]>([]);
+  const [documentResults, setDocumentResults] = useState<
+    DocumentSearchResult[]
+  >([]);
+  const [qaResults, setQAResults] = useState<QASearchResult[]>([]);
+  const [allDocuments, setAllDocuments] = useState<MedicalDocument[]>([]);
+  const [allQA, setAllQA] = useState<MedicalQA[]>([]);
   const [documentCount, setDocumentCount] = useState(0);
+  const [qaCount, setQACount] = useState(0);
+  const [newDocTitle, setNewDocTitle] = useState("");
   const [newDocContent, setNewDocContent] = useState("");
+  const [newDocSpecialty, setNewDocSpecialty] = useState("");
+  const [newDocYear, setNewDocYear] = useState("2024");
+  const [searchType, setSearchType] = useState<"documents" | "qa">("documents");
 
   const tursoService = getTursoDBService();
 
@@ -36,7 +47,10 @@ export function VectorDBDemo() {
 
   const initializeDatabase = async () => {
     if (Platform.OS === "web") {
-      Alert.alert("Not Available", "Turso DB is not available on web platform");
+      Alert.alert(
+        "Not Available",
+        "Medical DB is not available on web platform"
+      );
       return;
     }
 
@@ -45,10 +59,11 @@ export function VectorDBDemo() {
       await tursoService.initialize();
       setIsInitialized(true);
       await loadDocuments();
-      await updateDocumentCount();
+      await loadQA();
+      await updateCounts();
     } catch (error) {
       console.error("Failed to initialize database:", error);
-      Alert.alert("Error", "Failed to initialize vector database");
+      Alert.alert("Error", "Failed to initialize medical database");
     } finally {
       setIsLoading(false);
     }
@@ -56,19 +71,30 @@ export function VectorDBDemo() {
 
   const loadDocuments = async () => {
     try {
-      const docs = await tursoService.getAllDocuments();
+      const docs = await tursoService.getAllMedicalDocuments();
       setAllDocuments(docs);
     } catch (error) {
       console.error("Failed to load documents:", error);
     }
   };
 
-  const updateDocumentCount = async () => {
+  const loadQA = async () => {
     try {
-      const count = await tursoService.getDocumentCount();
-      setDocumentCount(count);
+      const qa = await tursoService.getAllMedicalQA();
+      setAllQA(qa);
     } catch (error) {
-      console.error("Failed to get document count:", error);
+      console.error("Failed to load Q&A:", error);
+    }
+  };
+
+  const updateCounts = async () => {
+    try {
+      const docCount = await tursoService.getMedicalDocumentCount();
+      const qaCount = await tursoService.getMedicalQACount();
+      setDocumentCount(docCount);
+      setQACount(qaCount);
+    } catch (error) {
+      console.error("Failed to get counts:", error);
     }
   };
 
@@ -80,12 +106,23 @@ export function VectorDBDemo() {
 
     setIsLoading(true);
     try {
-      const results = await tursoService.searchSimilar({
-        query: searchQuery,
-        limit: 5,
-        threshold: 0.1, // Lower threshold for demo purposes
-      });
-      setSearchResults(results);
+      if (searchType === "documents") {
+        const results = await tursoService.searchMedicalDocuments({
+          query: searchQuery,
+          limit: 5,
+          threshold: 0.3, // Lower threshold for more results with normalized embeddings
+        });
+        setDocumentResults(results);
+        setQAResults([]);
+      } else {
+        const results = await tursoService.searchMedicalQA({
+          query: searchQuery,
+          limit: 5,
+          threshold: 0.3, // Lower threshold for more results with normalized embeddings
+        });
+        setQAResults(results);
+        setDocumentResults([]);
+      }
     } catch (error) {
       console.error("Search failed:", error);
       Alert.alert("Error", "Search failed");
@@ -95,23 +132,35 @@ export function VectorDBDemo() {
   };
 
   const handleAddDocument = async () => {
-    if (!newDocContent.trim()) {
-      Alert.alert("Error", "Please enter document content");
+    if (
+      !newDocTitle.trim() ||
+      !newDocContent.trim() ||
+      !newDocSpecialty.trim()
+    ) {
+      Alert.alert("Error", "Please fill in all document fields");
       return;
     }
 
     setIsLoading(true);
     try {
-      const newDoc: VectorDocument = {
+      const newDoc: MedicalDocument = {
         id: `doc_${Date.now()}`,
+        title: newDocTitle,
         content: newDocContent,
+        vector: [],
+        created_at: new Date().toISOString(),
+        year: parseInt(newDocYear),
+        specialty: newDocSpecialty,
       };
 
-      await tursoService.addDocument(newDoc);
+      await tursoService.addMedicalDocument(newDoc);
+      setNewDocTitle("");
       setNewDocContent("");
+      setNewDocSpecialty("");
+      setNewDocYear("2024");
       await loadDocuments();
-      await updateDocumentCount();
-      Alert.alert("Success", "Document added successfully");
+      await updateCounts();
+      Alert.alert("Success", "Medical document added successfully");
     } catch (error) {
       console.error("Failed to add document:", error);
       Alert.alert("Error", "Failed to add document");
@@ -123,7 +172,7 @@ export function VectorDBDemo() {
   const handleDeleteDocument = async (id: string) => {
     Alert.alert(
       "Confirm Delete",
-      "Are you sure you want to delete this document?",
+      "Are you sure you want to delete this document? This will also delete any related Q&A pairs.",
       [
         { text: "Cancel", style: "cancel" },
         {
@@ -131,9 +180,10 @@ export function VectorDBDemo() {
           style: "destructive",
           onPress: async () => {
             try {
-              await tursoService.deleteDocument(id);
+              await tursoService.deleteMedicalDocument(id);
               await loadDocuments();
-              await updateDocumentCount();
+              await loadQA();
+              await updateCounts();
               Alert.alert("Success", "Document deleted successfully");
             } catch (error) {
               console.error("Failed to delete document:", error);
@@ -148,7 +198,7 @@ export function VectorDBDemo() {
   if (Platform.OS === "web") {
     return (
       <View style={styles.container}>
-        <Text style={styles.title}>Vector Database Demo</Text>
+        <Text style={styles.title}>Medical Database Demo</Text>
         <Text style={styles.subtitle}>Not available on web platform</Text>
       </View>
     );
@@ -159,12 +209,12 @@ export function VectorDBDemo() {
       <View style={styles.container}>
         <Text style={styles.title}>
           {isLoading
-            ? "Initializing Vector Database..."
-            : "Vector Database Demo"}
+            ? "Initializing Medical Database..."
+            : "Medical Database Demo"}
         </Text>
         {isLoading && (
           <Text style={styles.subtitle}>
-            Setting up Turso DB with example documents...
+            Setting up Medical DB with sample documents and Q&A...
           </Text>
         )}
       </View>
@@ -173,10 +223,9 @@ export function VectorDBDemo() {
 
   return (
     <ScrollView style={styles.scrollContainer}>
-      <Text style={styles.mainTitle}>🗄️ Vector Database Demo</Text>
-
+      <Text style={styles.mainTitle}>🏥 Medical Database Demo</Text>
       <Text style={styles.subtitle}>
-        Powered by Turso DB with libSQL Vector Search
+        Powered by Turso DB with Medical Vector Search
       </Text>
 
       {/* Database Stats */}
@@ -187,24 +236,44 @@ export function VectorDBDemo() {
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <Text style={styles.text}>Total Documents: {documentCount}</Text>
+          <Text style={styles.text}>Medical Documents: {documentCount}</Text>
+          <Text style={styles.text}>Q&A Pairs: {qaCount}</Text>
           <Text style={styles.text}>
             Status: {tursoService.isReady() ? "✅ Ready" : "❌ Not Ready"}
           </Text>
         </CardContent>
       </Card>
 
-      {/* Vector Search */}
+      {/* Search Type Toggle */}
       <Card style={styles.sectionContainer}>
         <CardHeader>
           <CardTitle>
-            <Text style={styles.sectionTitle}>🔍 Vector Search</Text>
+            <Text style={styles.sectionTitle}>🔍 Medical Search</Text>
           </CardTitle>
         </CardHeader>
         <CardContent>
+          <View style={styles.toggleContainer}>
+            <Button
+              variant={searchType === "documents" ? "default" : "secondary"}
+              onPress={() => setSearchType("documents")}
+              style={styles.toggleButton}
+            >
+              Documents
+            </Button>
+            <Button
+              variant={searchType === "qa" ? "default" : "secondary"}
+              onPress={() => setSearchType("qa")}
+              style={styles.toggleButton}
+            >
+              Q&A
+            </Button>
+          </View>
+
           <Input
             style={styles.textInput}
-            placeholder="Enter search query..."
+            placeholder={`Search ${
+              searchType === "documents" ? "medical documents" : "Q&A pairs"
+            }...`}
             value={searchQuery}
             onChangeText={setSearchQuery}
             multiline
@@ -215,28 +284,49 @@ export function VectorDBDemo() {
             disabled={isLoading}
             style={styles.button}
           >
-            {isLoading ? "Searching..." : "Search Similar Documents"}
+            {isLoading
+              ? "Searching..."
+              : `Search ${searchType === "documents" ? "Documents" : "Q&A"}`}
           </Button>
 
           {/* Search Results */}
-          {searchResults.length > 0 && (
+          {documentResults.length > 0 && (
             <View style={styles.resultsContainer}>
-              <Text style={styles.resultsTitle}>Search Results:</Text>
-              {searchResults.map((result, index) => (
+              <Text style={styles.resultsTitle}>Document Search Results:</Text>
+              {documentResults.map((result, index) => (
                 <Card key={result.document.id} style={styles.resultItem}>
                   <CardContent>
                     <Text style={styles.resultHeader}>
-                      #{index + 1} (Similarity:{" "}
+                      #{index + 1} - {result.document.title} (Similarity:{" "}
                       {(result.similarity * 100).toFixed(1)}%)
                     </Text>
                     <Text style={styles.resultContent}>
                       {result.document.content}
                     </Text>
-                    {result.document.specialty && (
-                      <Text style={styles.resultMeta}>
-                        Specialty: {result.document.specialty}
-                      </Text>
-                    )}
+                    <Text style={styles.resultMeta}>
+                      Specialty: {result.document.specialty} | Year:{" "}
+                      {result.document.year}
+                    </Text>
+                  </CardContent>
+                </Card>
+              ))}
+            </View>
+          )}
+
+          {qaResults.length > 0 && (
+            <View style={styles.resultsContainer}>
+              <Text style={styles.resultsTitle}>Q&A Search Results:</Text>
+              {qaResults.map((result, index) => (
+                <Card key={result.qa.id} style={styles.resultItem}>
+                  <CardContent>
+                    <Text style={styles.resultHeader}>
+                      #{index + 1} (Similarity:{" "}
+                      {(result.similarity * 100).toFixed(1)}%)
+                    </Text>
+                    <Text style={styles.qaQuestion}>
+                      Q: {result.qa.question}
+                    </Text>
+                    <Text style={styles.qaAnswer}>A: {result.qa.answer}</Text>
                   </CardContent>
                 </Card>
               ))}
@@ -249,16 +339,35 @@ export function VectorDBDemo() {
       <Card style={styles.sectionContainer}>
         <CardHeader>
           <CardTitle>
-            <Text style={styles.sectionTitle}>➕ Add New Document</Text>
+            <Text style={styles.sectionTitle}>➕ Add Medical Document</Text>
           </CardTitle>
         </CardHeader>
         <CardContent>
+          <Input
+            style={styles.textInput}
+            placeholder="Document title..."
+            value={newDocTitle}
+            onChangeText={setNewDocTitle}
+          />
+          <Input
+            style={styles.textInput}
+            placeholder="Medical specialty..."
+            value={newDocSpecialty}
+            onChangeText={setNewDocSpecialty}
+          />
+          <Input
+            style={styles.textInput}
+            placeholder="Publication year..."
+            value={newDocYear}
+            onChangeText={setNewDocYear}
+            keyboardType="numeric"
+          />
           <Input
             style={StyleSheet.flatten([
               styles.textInput,
               styles.multilineInput,
             ])}
-            placeholder="Enter document content..."
+            placeholder="Document content..."
             value={newDocContent}
             onChangeText={setNewDocContent}
             multiline
@@ -279,7 +388,7 @@ export function VectorDBDemo() {
       <Card style={styles.sectionContainer}>
         <CardHeader>
           <CardTitle>
-            <Text style={styles.sectionTitle}>📚 All Documents</Text>
+            <Text style={styles.sectionTitle}>📚 Medical Documents</Text>
           </CardTitle>
         </CardHeader>
         <CardContent>
@@ -288,15 +397,11 @@ export function VectorDBDemo() {
               <CardContent>
                 <View style={styles.documentContent}>
                   <View style={styles.documentInfo}>
-                    <Text style={styles.documentTitle}>
-                      Document #{index + 1}
-                    </Text>
+                    <Text style={styles.documentTitle}>{doc.title}</Text>
                     <Text style={styles.documentText}>{doc.content}</Text>
-                    {doc.specialty && (
-                      <Text style={styles.documentMeta}>
-                        Specialty: {doc.specialty}
-                      </Text>
-                    )}
+                    <Text style={styles.documentMeta}>
+                      Specialty: {doc.specialty} | Year: {doc.year}
+                    </Text>
                   </View>
                   <Button
                     variant="destructive"
@@ -307,6 +412,28 @@ export function VectorDBDemo() {
                     Delete
                   </Button>
                 </View>
+              </CardContent>
+            </Card>
+          ))}
+        </CardContent>
+      </Card>
+
+      {/* All Q&A */}
+      <Card style={styles.sectionContainer}>
+        <CardHeader>
+          <CardTitle>
+            <Text style={styles.sectionTitle}>❓ Medical Q&A</Text>
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          {allQA.map((qa, index) => (
+            <Card key={qa.id} style={styles.documentItem}>
+              <CardContent>
+                <Text style={styles.qaQuestion}>Q: {qa.question}</Text>
+                <Text style={styles.qaAnswer}>A: {qa.answer}</Text>
+                <Text style={styles.documentMeta}>
+                  Document ID: {qa.document_id}
+                </Text>
               </CardContent>
             </Card>
           ))}
@@ -365,6 +492,14 @@ const styles = StyleSheet.create({
     color: "#374151",
     marginBottom: 4,
   },
+  toggleContainer: {
+    flexDirection: "row",
+    marginBottom: 12,
+    gap: 8,
+  },
+  toggleButton: {
+    flex: 1,
+  },
   textInput: {
     borderWidth: 1,
     borderColor: "#D1D5DB",
@@ -379,19 +514,6 @@ const styles = StyleSheet.create({
     padding: 12,
     borderRadius: 8,
     alignItems: "center",
-  },
-  buttonPrimary: {
-    backgroundColor: "#3B82F6",
-  },
-  buttonSuccess: {
-    backgroundColor: "#10B981",
-  },
-  buttonDisabled: {
-    backgroundColor: "#9CA3AF",
-  },
-  buttonText: {
-    color: "#FFFFFF",
-    fontWeight: "600",
   },
   resultsContainer: {
     marginTop: 16,
@@ -418,6 +540,15 @@ const styles = StyleSheet.create({
     color: "#6B7280",
     marginTop: 4,
   },
+  qaQuestion: {
+    fontWeight: "500",
+    color: "#1F2937",
+    marginBottom: 4,
+  },
+  qaAnswer: {
+    color: "#374151",
+    marginBottom: 4,
+  },
   documentItem: {
     backgroundColor: "#F9FAFB",
     padding: 12,
@@ -434,6 +565,8 @@ const styles = StyleSheet.create({
   },
   documentTitle: {
     fontWeight: "500",
+    fontSize: 16,
+    marginBottom: 4,
   },
   documentText: {
     color: "#374151",
@@ -450,9 +583,5 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
     borderRadius: 4,
     marginLeft: 8,
-  },
-  deleteButtonText: {
-    color: "#FFFFFF",
-    fontSize: 12,
   },
 });
