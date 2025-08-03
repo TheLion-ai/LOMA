@@ -10,6 +10,7 @@ import {
 } from "react-native";
 import { Avatar } from "@/components/ui/avatar";
 import { Separator } from "@/components/ui/separator";
+import { SourcesDisplay } from "@/components/sources-display";
 import { Ionicons } from "@expo/vector-icons";
 import { createAIService, AIService } from "@/lib/ai-service";
 import { ChatMessage, Chat as ChatType } from "@/lib/chat-storage";
@@ -304,11 +305,7 @@ export default function Chat({
             "I apologize, but I'm having trouble generating a proper response. Could you please rephrase your question?";
         }
 
-        // Add sources to response if available
-        if (sources.length > 0) {
-          const sourcesText = ragService.formatSourcesForDisplay(sources);
-          responseText += sourcesText;
-        }
+        // Don't append sources to response text anymore - they'll be displayed separately
       }
 
       // Update RAG status
@@ -470,6 +467,12 @@ export default function Chat({
                 </View>
               </View>
             </View>
+            {/* Show sources for the last assistant message */}
+            {message.role === "assistant" && 
+             index === messages.length - 1 && 
+             lastSources.length > 0 && (
+              <SourcesDisplay sources={lastSources} />
+            )}
           </View>
         ))}
 

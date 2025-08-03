@@ -1295,6 +1295,66 @@ export class TursoDBService {
   }
 
   /**
+   * Gets medical documents by their IDs
+   *
+   * @param documentIds - Array of document IDs to retrieve
+   * @returns Array of medical documents
+   * @throws Error if the database is not initialized
+   */
+  async getDocumentsByIds(documentIds: string[]): Promise<MedicalDocument[]> {
+    if (!this.isInitialized || !this.db) {
+      throw new Error("Database not initialized");
+    }
+
+    if (!documentIds || documentIds.length === 0) {
+      return [];
+    }
+
+    try {
+      // Create placeholders for the IN clause
+      const placeholders = documentIds.map(() => '?').join(',');
+      const result = await this.db.execute(
+        `SELECT id, title, content, vector_extract(vector) as vector_json, created_at, url, year, specialty 
+         FROM documents 
+         WHERE id IN (${placeholders})`,
+        documentIds
+      );
+
+      const documents: MedicalDocument[] = [];
+
+      if (result.rows) {
+        for (const row of result.rows) {
+          try {
+            const document: MedicalDocument = {
+              id: row.id,
+              title: row.title,
+              content: row.content,
+              vector: row.vector_json ? JSON.parse(row.vector_json) : [],
+              created_at: row.created_at,
+              url: row.url,
+              year: row.year,
+              specialty: row.specialty,
+            };
+            documents.push(document);
+          } catch (parseError) {
+            console.warn(`Error parsing document ${row.id}:`, parseError);
+          }
+        }
+      }
+
+      console.log(`Retrieved ${documents.length} documents by IDs`);
+      return documents;
+    } catch (error) {
+      console.error("Error getting documents by IDs:", error);
+      throw new Error(
+        `Failed to get documents by IDs: ${
+          error instanceof Error ? error.message : String(error)
+        }`
+      );
+    }
+  }
+
+  /**
    * Cleans up database resources
    * Closes the database connection and resets the service state
    */
