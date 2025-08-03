@@ -225,10 +225,6 @@ export class TursoDBService {
     }
   }
 
-  // Note: createTables method removed - the downloaded database already has the proper schema
-
-  // Note: insertExampleDocuments method removed - using real medical database data
-
   /**
    * Generates a real embedding vector using the queued embedding service
    * @private

@@ -5,7 +5,7 @@
  */
 
 import React from "react";
-import { View, Text, StyleSheet, ActivityIndicator, Alert } from "react-native";
+import { View, Text, StyleSheet, ActivityIndicator } from "react-native";
 import { useDatabase } from "../lib/database-context";
 import { DatabaseDownloadService } from "../lib/database-download-service";
 import { Button } from "./ui/button";
@@ -125,7 +125,7 @@ export function DatabaseInitialization({
                   ? ` / ${DatabaseDownloadService.formatBytes(
                       downloadProgress.totalBytesExpected
                     )}`
-                  : null}
+                  : ""}
               </Text>
 
               {downloadProgress.speedBps && (
@@ -164,19 +164,7 @@ export function DatabaseInitialization({
 
   // Database is ready, show the main app
   if (initState === "ready" && isDatabaseReady) {
-    return (
-      <View style={{ flex: 1 }}>
-        {/* Optional: Show database status in a small header */}
-        <View style={styles.statusHeader}>
-          <Text style={styles.statusText}>
-            {isDatabaseAvailable
-              ? "✓ Medical Database Loaded"
-              : "⚠️ Database Not Available"}
-          </Text>
-        </View>
-        {children}
-      </View>
-    );
+    return <View style={{ flex: 1 }}>{children}</View>;
   }
 
   // Fallback loading state
