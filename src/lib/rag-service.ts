@@ -5,7 +5,8 @@
  * for enhanced medical knowledge responses.
  */
 
-import { DocumentSearchResult, MedicalQA } from "./turso-db-service";
+import { DocumentSearchResult, getTursoDBService } from "./turso-db-service";
+
 import {
   performMedicalSearch,
   hasQualityResults,
@@ -28,15 +29,12 @@ const DEFAULT_RAG_CONFIG: RAGConfig = {
   },
   maxContextLength: 4000, // Max characters for context
   includeSources: true,
-  contextTemplate: `CONTEXT: The following medical documents and Q&A pairs are provided as reference:
+  contextTemplate: `CONTEXT: The following medical passages provided as reference:
 
-DOCUMENTS:
-{documents}
+{answers}
 
-Q&A PAIRS:
-{qaData}
+Please use this context to provide accurate medical information. Always cite sources [n] when referencing the provided context.
 
-Please use this context to provide accurate medical information. Always cite sources when referencing the provided context.
 
 USER QUESTION: {query}`,
 };
@@ -96,9 +94,11 @@ export class RAGService {
 
       // Format context for AI
       const context = this.formatContextForAI(searchResults, query);
+      console.log(`Final LLM Prompt:\n${context}`);
 
       // Extract sources for citation
-      const sources = this.extractSources(searchResults);
+      const sources = await this.extractSources(searchResults);
+
 
       // Log completion
       const duration = Date.now() - startTime;
@@ -139,58 +139,24 @@ export class RAGService {
    * @returns Formatted context string
    */
   formatContextForAI(results: CombinedSearchResult, query: string): string {
-    // Format documents section
-    const documentsSection = results.documents
-      .map((docResult, index) => {
-        const doc = docResult.document;
-        const similarity = Math.round(docResult.similarity * 100);
-
-        // Truncate content if too long
-        const maxContentLength = 300;
-        let content = doc.content;
-        if (content.length > maxContentLength) {
-          content = content.substring(0, maxContentLength) + "...";
-        }
-
-        const urlText = doc.url ? ` (Source: ${doc.url})` : "";
-        return `${index + 1}. ${
-          doc.title
-        } - ${content}${urlText} [${similarity}% match]`;
-      })
-      .join("\n");
-
-    // Format Q&A section
-    const qaSection = results.qaData
-      .slice(0, 10) // Limit Q&A pairs to prevent context overflow
+    const answersSection = results.qaData
+      .slice(0, 10)
       .map((qa, index) => {
-        // Truncate long Q&A content
-        const maxQLength = 150;
         const maxALength = 200;
-
-        let question = qa.question;
-        if (question.length > maxQLength) {
-          question = question.substring(0, maxQLength) + "...";
-        }
 
         let answer = qa.answer;
         if (answer.length > maxALength) {
           answer = answer.substring(0, maxALength) + "...";
         }
-
-        return `${index + 1}. Q: ${question} A: ${answer}`;
+        return `[${index + 1}] ${answer}`;
       })
       .join("\n");
 
-    // Generate context using template
     let context = this.config.contextTemplate
-      .replace(
-        "{documents}",
-        documentsSection || "No relevant documents found."
-      )
-      .replace("{qaData}", qaSection || "No relevant Q&A pairs found.")
+      .replace("{answers}", answersSection || "No relevant passages found.")
       .replace("{query}", query);
 
-    // Truncate if context is too long
+
     if (context.length > this.config.maxContextLength) {
       console.log(
         `⚠️ Context truncated from ${context.length} to ${this.config.maxContextLength} characters`
@@ -208,57 +174,47 @@ export class RAGService {
    * @param results Combined search results
    * @returns Array of source objects
    */
-  extractSources(results: CombinedSearchResult): Source[] {
+  async extractSources(results: CombinedSearchResult): Promise<Source[]> {
     const sources: Source[] = [];
-
-    // Add document sources
-    for (const docResult of results.documents) {
-      const doc = docResult.document;
-
-      // Create excerpt from content
-      const maxExcerptLength = 100;
-      let excerpt = doc.content;
-      if (excerpt.length > maxExcerptLength) {
-        excerpt = excerpt.substring(0, maxExcerptLength) + "...";
+    const seenDocumentIds = new Set<string>();
+    const orderedQAData = results.qaData.slice(0, 10);
+    const orderedDocumentIds: string[] = [];
+    
+    for (const qa of orderedQAData) {
+      if (qa.document_id && !seenDocumentIds.has(qa.document_id)) {
+        orderedDocumentIds.push(qa.document_id);
+        seenDocumentIds.add(qa.document_id);
       }
-
-      sources.push({
-        id: doc.id,
-        title: doc.title,
-        url: doc.url,
-        type: "document",
-        similarity: docResult.similarity,
-        excerpt,
-      });
     }
 
-    // Add Q&A sources (limited to prevent overwhelming)
-    const maxQASources = 5;
-    for (const qa of results.qaData.slice(0, maxQASources)) {
-      // Use question as excerpt
-      const maxExcerptLength = 80;
-      let excerpt = qa.question;
-      if (excerpt.length > maxExcerptLength) {
-        excerpt = excerpt.substring(0, maxExcerptLength) + "...";
+    if (orderedDocumentIds.length > 0) {
+      try {
+        const dbService = getTursoDBService();
+        const referencedDocuments = await dbService.getDocumentsByIds(orderedDocumentIds);
+        const documentMap = new Map(referencedDocuments.map(doc => [doc.id, doc]));
+        
+        for (const docId of orderedDocumentIds) {
+          const doc = documentMap.get(docId);
+          if (doc) {
+            sources.push({
+              id: doc.id,
+              title: doc.title,
+              url: doc.url,
+              type: 'document',
+              similarity: undefined,
+              excerpt: doc.content,
+              year: doc.year,
+              specialty: doc.specialty
+            });
+          }
+        }
+      } catch (error) {
+        console.error('Error fetching referenced documents:', error);
       }
-
-      sources.push({
-        id: qa.id,
-        title: `Q&A: ${excerpt}`,
-        type: "qa",
-        similarity: 0, // Q&A from documents don't have similarity scores
-        excerpt:
-          qa.answer.substring(0, 100) + (qa.answer.length > 100 ? "..." : ""),
-      });
     }
 
-    // Sort sources by similarity (documents first, then Q&A)
-    return sources.sort((a, b) => {
-      if (a.type !== b.type) {
-        return a.type === "document" ? -1 : 1;
-      }
-      return b.similarity - a.similarity;
-    });
+    return sources;
+
   }
 
   /**

@@ -57,6 +57,12 @@ export interface Source {
   excerpt: string;
   /** Unique identifier */
   id: string;
+
+  /** Publication year (for documents) */
+  year?: number;
+  /** Medical specialty (for documents) */
+  specialty?: string;
+
 }
 
 /**
