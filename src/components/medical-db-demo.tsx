@@ -1,25 +1,40 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, ScrollView, Alert, Platform, StyleSheet } from 'react-native';
-import { getTursoDBService, MedicalDocument, DocumentSearchResult, QASearchResult, MedicalQA } from '../lib/turso-db-service';
-import { Button } from './ui/button';
-import { Card, CardHeader, CardTitle, CardContent } from './ui/card';
-import { Input } from './ui/input';
+import React, { useState, useEffect } from "react";
+import {
+  View,
+  Text,
+  ScrollView,
+  Alert,
+  Platform,
+  StyleSheet,
+} from "react-native";
+import {
+  getTursoDBService,
+  MedicalDocument,
+  DocumentSearchResult,
+  QASearchResult,
+  MedicalQA,
+} from "../lib/turso-db-service";
+import { Button } from "./ui/button";
+import { Card, CardHeader, CardTitle, CardContent } from "./ui/card";
+import { Input } from "./ui/input";
 
 export function MedicalDBDemo() {
   const [isInitialized, setIsInitialized] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [documentResults, setDocumentResults] = useState<DocumentSearchResult[]>([]);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [documentResults, setDocumentResults] = useState<
+    DocumentSearchResult[]
+  >([]);
   const [qaResults, setQAResults] = useState<QASearchResult[]>([]);
   const [allDocuments, setAllDocuments] = useState<MedicalDocument[]>([]);
   const [allQA, setAllQA] = useState<MedicalQA[]>([]);
   const [documentCount, setDocumentCount] = useState(0);
   const [qaCount, setQACount] = useState(0);
-  const [newDocTitle, setNewDocTitle] = useState('');
-  const [newDocContent, setNewDocContent] = useState('');
-  const [newDocSpecialty, setNewDocSpecialty] = useState('');
-  const [newDocYear, setNewDocYear] = useState('2024');
-  const [searchType, setSearchType] = useState<'documents' | 'qa'>('documents');
+  const [newDocTitle, setNewDocTitle] = useState("");
+  const [newDocContent, setNewDocContent] = useState("");
+  const [newDocSpecialty, setNewDocSpecialty] = useState("");
+  const [newDocYear, setNewDocYear] = useState("2024");
+  const [searchType, setSearchType] = useState<"documents" | "qa">("documents");
 
   const tursoService = getTursoDBService();
 
@@ -31,8 +46,11 @@ export function MedicalDBDemo() {
   }, []);
 
   const initializeDatabase = async () => {
-    if (Platform.OS === 'web') {
-      Alert.alert('Not Available', 'Medical DB is not available on web platform');
+    if (Platform.OS === "web") {
+      Alert.alert(
+        "Not Available",
+        "Medical DB is not available on web platform"
+      );
       return;
     }
 
@@ -44,8 +62,8 @@ export function MedicalDBDemo() {
       await loadQA();
       await updateCounts();
     } catch (error) {
-      console.error('Failed to initialize database:', error);
-      Alert.alert('Error', 'Failed to initialize medical database');
+      console.error("Failed to initialize database:", error);
+      Alert.alert("Error", "Failed to initialize medical database");
     } finally {
       setIsLoading(false);
     }
@@ -56,7 +74,7 @@ export function MedicalDBDemo() {
       const docs = await tursoService.getAllMedicalDocuments();
       setAllDocuments(docs);
     } catch (error) {
-      console.error('Failed to load documents:', error);
+      console.error("Failed to load documents:", error);
     }
   };
 
@@ -65,7 +83,7 @@ export function MedicalDBDemo() {
       const qa = await tursoService.getAllMedicalQA();
       setAllQA(qa);
     } catch (error) {
-      console.error('Failed to load Q&A:', error);
+      console.error("Failed to load Q&A:", error);
     }
   };
 
@@ -76,23 +94,23 @@ export function MedicalDBDemo() {
       setDocumentCount(docCount);
       setQACount(qaCount);
     } catch (error) {
-      console.error('Failed to get counts:', error);
+      console.error("Failed to get counts:", error);
     }
   };
 
   const handleSearch = async () => {
     if (!searchQuery.trim()) {
-      Alert.alert('Error', 'Please enter a search query');
+      Alert.alert("Error", "Please enter a search query");
       return;
     }
 
     setIsLoading(true);
     try {
-      if (searchType === 'documents') {
+      if (searchType === "documents") {
         const results = await tursoService.searchMedicalDocuments({
           query: searchQuery,
           limit: 5,
-          threshold: 0.3  // Lower threshold for more results with normalized embeddings
+          threshold: 0.3, // Lower threshold for more results with normalized embeddings
         });
         setDocumentResults(results);
         setQAResults([]);
@@ -100,22 +118,26 @@ export function MedicalDBDemo() {
         const results = await tursoService.searchMedicalQA({
           query: searchQuery,
           limit: 5,
-          threshold: 0.3  // Lower threshold for more results with normalized embeddings
+          threshold: 0.3, // Lower threshold for more results with normalized embeddings
         });
         setQAResults(results);
         setDocumentResults([]);
       }
     } catch (error) {
-      console.error('Search failed:', error);
-      Alert.alert('Error', 'Search failed');
+      console.error("Search failed:", error);
+      Alert.alert("Error", "Search failed");
     } finally {
       setIsLoading(false);
     }
   };
 
   const handleAddDocument = async () => {
-    if (!newDocTitle.trim() || !newDocContent.trim() || !newDocSpecialty.trim()) {
-      Alert.alert('Error', 'Please fill in all document fields');
+    if (
+      !newDocTitle.trim() ||
+      !newDocContent.trim() ||
+      !newDocSpecialty.trim()
+    ) {
+      Alert.alert("Error", "Please fill in all document fields");
       return;
     }
 
@@ -128,20 +150,20 @@ export function MedicalDBDemo() {
         vector: [],
         created_at: new Date().toISOString(),
         year: parseInt(newDocYear),
-        specialty: newDocSpecialty
+        specialty: newDocSpecialty,
       };
 
       await tursoService.addMedicalDocument(newDoc);
-      setNewDocTitle('');
-      setNewDocContent('');
-      setNewDocSpecialty('');
-      setNewDocYear('2024');
+      setNewDocTitle("");
+      setNewDocContent("");
+      setNewDocSpecialty("");
+      setNewDocYear("2024");
       await loadDocuments();
       await updateCounts();
-      Alert.alert('Success', 'Medical document added successfully');
+      Alert.alert("Success", "Medical document added successfully");
     } catch (error) {
-      console.error('Failed to add document:', error);
-      Alert.alert('Error', 'Failed to add document');
+      console.error("Failed to add document:", error);
+      Alert.alert("Error", "Failed to add document");
     } finally {
       setIsLoading(false);
     }
@@ -149,31 +171,31 @@ export function MedicalDBDemo() {
 
   const handleDeleteDocument = async (id: string) => {
     Alert.alert(
-      'Confirm Delete',
-      'Are you sure you want to delete this document? This will also delete any related Q&A pairs.',
+      "Confirm Delete",
+      "Are you sure you want to delete this document? This will also delete any related Q&A pairs.",
       [
-        { text: 'Cancel', style: 'cancel' },
+        { text: "Cancel", style: "cancel" },
         {
-          text: 'Delete',
-          style: 'destructive',
+          text: "Delete",
+          style: "destructive",
           onPress: async () => {
             try {
               await tursoService.deleteMedicalDocument(id);
               await loadDocuments();
               await loadQA();
               await updateCounts();
-              Alert.alert('Success', 'Document deleted successfully');
+              Alert.alert("Success", "Document deleted successfully");
             } catch (error) {
-              console.error('Failed to delete document:', error);
-              Alert.alert('Error', 'Failed to delete document');
+              console.error("Failed to delete document:", error);
+              Alert.alert("Error", "Failed to delete document");
             }
-          }
-        }
+          },
+        },
       ]
     );
   };
 
-  if (Platform.OS === 'web') {
+  if (Platform.OS === "web") {
     return (
       <View style={styles.container}>
         <Text style={styles.title}>Medical Database Demo</Text>
@@ -186,7 +208,9 @@ export function MedicalDBDemo() {
     return (
       <View style={styles.container}>
         <Text style={styles.title}>
-          {isLoading ? 'Initializing Medical Database...' : 'Medical Database Demo'}
+          {isLoading
+            ? "Initializing Medical Database..."
+            : "Medical Database Demo"}
         </Text>
         {isLoading && (
           <Text style={styles.subtitle}>
@@ -200,7 +224,9 @@ export function MedicalDBDemo() {
   return (
     <ScrollView style={styles.scrollContainer}>
       <Text style={styles.mainTitle}>🏥 Medical Database Demo</Text>
-      <Text style={styles.subtitle}>Powered by Turso DB with Medical Vector Search</Text>
+      <Text style={styles.subtitle}>
+        Powered by Turso DB with Medical Vector Search
+      </Text>
 
       {/* Database Stats */}
       <Card style={styles.statsContainer}>
@@ -212,7 +238,9 @@ export function MedicalDBDemo() {
         <CardContent>
           <Text style={styles.text}>Medical Documents: {documentCount}</Text>
           <Text style={styles.text}>Q&A Pairs: {qaCount}</Text>
-          <Text style={styles.text}>Status: {tursoService.isReady() ? '✅ Ready' : '❌ Not Ready'}</Text>
+          <Text style={styles.text}>
+            Status: {tursoService.isReady() ? "✅ Ready" : "❌ Not Ready"}
+          </Text>
         </CardContent>
       </Card>
 
@@ -226,24 +254,26 @@ export function MedicalDBDemo() {
         <CardContent>
           <View style={styles.toggleContainer}>
             <Button
-              variant={searchType === 'documents' ? 'default' : 'secondary'}
-              onPress={() => setSearchType('documents')}
+              variant={searchType === "documents" ? "default" : "secondary"}
+              onPress={() => setSearchType("documents")}
               style={styles.toggleButton}
             >
               Documents
             </Button>
             <Button
-              variant={searchType === 'qa' ? 'default' : 'secondary'}
-              onPress={() => setSearchType('qa')}
+              variant={searchType === "qa" ? "default" : "secondary"}
+              onPress={() => setSearchType("qa")}
               style={styles.toggleButton}
             >
               Q&A
             </Button>
           </View>
-          
+
           <Input
             style={styles.textInput}
-            placeholder={`Search ${searchType === 'documents' ? 'medical documents' : 'Q&A pairs'}...`}
+            placeholder={`Search ${
+              searchType === "documents" ? "medical documents" : "Q&A pairs"
+            }...`}
             value={searchQuery}
             onChangeText={setSearchQuery}
             multiline
@@ -254,7 +284,9 @@ export function MedicalDBDemo() {
             disabled={isLoading}
             style={styles.button}
           >
-            {isLoading ? 'Searching...' : `Search ${searchType === 'documents' ? 'Documents' : 'Q&A'}`}
+            {isLoading
+              ? "Searching..."
+              : `Search ${searchType === "documents" ? "Documents" : "Q&A"}`}
           </Button>
 
           {/* Search Results */}
@@ -265,11 +297,15 @@ export function MedicalDBDemo() {
                 <Card key={result.document.id} style={styles.resultItem}>
                   <CardContent>
                     <Text style={styles.resultHeader}>
-                      #{index + 1} - {result.document.title} (Similarity: {(result.similarity * 100).toFixed(1)}%)
+                      #{index + 1} - {result.document.title} (Similarity:{" "}
+                      {(result.similarity * 100).toFixed(1)}%)
                     </Text>
-                    <Text style={styles.resultContent}>{result.document.content}</Text>
+                    <Text style={styles.resultContent}>
+                      {result.document.content}
+                    </Text>
                     <Text style={styles.resultMeta}>
-                      Specialty: {result.document.specialty} | Year: {result.document.year}
+                      Specialty: {result.document.specialty} | Year:{" "}
+                      {result.document.year}
                     </Text>
                   </CardContent>
                 </Card>
@@ -284,9 +320,12 @@ export function MedicalDBDemo() {
                 <Card key={result.qa.id} style={styles.resultItem}>
                   <CardContent>
                     <Text style={styles.resultHeader}>
-                      #{index + 1} (Similarity: {(result.similarity * 100).toFixed(1)}%)
+                      #{index + 1} (Similarity:{" "}
+                      {(result.similarity * 100).toFixed(1)}%)
                     </Text>
-                    <Text style={styles.qaQuestion}>Q: {result.qa.question}</Text>
+                    <Text style={styles.qaQuestion}>
+                      Q: {result.qa.question}
+                    </Text>
                     <Text style={styles.qaAnswer}>A: {result.qa.answer}</Text>
                   </CardContent>
                 </Card>
@@ -324,7 +363,10 @@ export function MedicalDBDemo() {
             keyboardType="numeric"
           />
           <Input
-            style={StyleSheet.flatten([styles.textInput, styles.multilineInput])}
+            style={StyleSheet.flatten([
+              styles.textInput,
+              styles.multilineInput,
+            ])}
             placeholder="Document content..."
             value={newDocContent}
             onChangeText={setNewDocContent}
@@ -337,7 +379,7 @@ export function MedicalDBDemo() {
             disabled={isLoading}
             style={styles.button}
           >
-            {isLoading ? 'Adding...' : 'Add Document'}
+            {isLoading ? "Adding..." : "Add Document"}
           </Button>
         </CardContent>
       </Card>
@@ -389,7 +431,9 @@ export function MedicalDBDemo() {
               <CardContent>
                 <Text style={styles.qaQuestion}>Q: {qa.question}</Text>
                 <Text style={styles.qaAnswer}>A: {qa.answer}</Text>
-                <Text style={styles.documentMeta}>Document ID: {qa.document_id}</Text>
+                <Text style={styles.documentMeta}>
+                  Document ID: {qa.document_id}
+                </Text>
               </CardContent>
             </Card>
           ))}
@@ -409,47 +453,47 @@ const styles = StyleSheet.create({
   },
   title: {
     fontSize: 18,
-    fontWeight: 'bold',
-    textAlign: 'center',
-    color: '#6B7280',
+    fontWeight: "bold",
+    textAlign: "center",
+    color: "#6B7280",
   },
   mainTitle: {
     fontSize: 24,
-    fontWeight: 'bold',
-    textAlign: 'center',
+    fontWeight: "bold",
+    textAlign: "center",
     marginBottom: 16,
   },
   subtitle: {
-    textAlign: 'center',
-    color: '#6B7280',
+    textAlign: "center",
+    color: "#6B7280",
     marginTop: 8,
     marginBottom: 24,
   },
   statsContainer: {
-    backgroundColor: '#EBF8FF',
+    backgroundColor: "#EBF8FF",
     padding: 16,
     borderRadius: 8,
     marginBottom: 24,
   },
   sectionContainer: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: "#FFFFFF",
     padding: 16,
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: '#E5E7EB',
+    borderColor: "#E5E7EB",
     marginBottom: 24,
   },
   sectionTitle: {
     fontSize: 18,
-    fontWeight: '600',
+    fontWeight: "600",
     marginBottom: 12,
   },
   text: {
-    color: '#374151',
+    color: "#374151",
     marginBottom: 4,
   },
   toggleContainer: {
-    flexDirection: 'row',
+    flexDirection: "row",
     marginBottom: 12,
     gap: 8,
   },
@@ -458,7 +502,7 @@ const styles = StyleSheet.create({
   },
   textInput: {
     borderWidth: 1,
-    borderColor: '#D1D5DB',
+    borderColor: "#D1D5DB",
     borderRadius: 8,
     padding: 12,
     marginBottom: 12,
@@ -469,72 +513,72 @@ const styles = StyleSheet.create({
   button: {
     padding: 12,
     borderRadius: 8,
-    alignItems: 'center',
+    alignItems: "center",
   },
   resultsContainer: {
     marginTop: 16,
   },
   resultsTitle: {
-    fontWeight: '600',
+    fontWeight: "600",
     marginBottom: 8,
   },
   resultItem: {
-    backgroundColor: '#F9FAFB',
+    backgroundColor: "#F9FAFB",
     padding: 12,
     borderRadius: 8,
     marginBottom: 8,
   },
   resultHeader: {
-    fontWeight: '500',
+    fontWeight: "500",
   },
   resultContent: {
-    color: '#374151',
+    color: "#374151",
     marginTop: 4,
   },
   resultMeta: {
     fontSize: 12,
-    color: '#6B7280',
+    color: "#6B7280",
     marginTop: 4,
   },
   qaQuestion: {
-    fontWeight: '500',
-    color: '#1F2937',
+    fontWeight: "500",
+    color: "#1F2937",
     marginBottom: 4,
   },
   qaAnswer: {
-    color: '#374151',
+    color: "#374151",
     marginBottom: 4,
   },
   documentItem: {
-    backgroundColor: '#F9FAFB',
+    backgroundColor: "#F9FAFB",
     padding: 12,
     borderRadius: 8,
     marginBottom: 8,
   },
   documentContent: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "flex-start",
   },
   documentInfo: {
     flex: 1,
   },
   documentTitle: {
-    fontWeight: '500',
+    fontWeight: "500",
     fontSize: 16,
     marginBottom: 4,
   },
   documentText: {
-    color: '#374151',
+    color: "#374151",
     marginTop: 4,
   },
   documentMeta: {
     fontSize: 12,
-    color: '#6B7280',
+    color: "#6B7280",
     marginTop: 4,
   },
   deleteButton: {
-    backgroundColor: '#EF4444',
+    backgroundColor: "#EF4444",
     paddingHorizontal: 12,
     paddingVertical: 4,
     borderRadius: 4,

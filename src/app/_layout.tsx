@@ -2,18 +2,24 @@ import "react-native-gesture-handler";
 import "@/global.css";
 import { Slot } from "expo-router";
 import Head from "expo-router/head";
+import { DatabaseProvider } from "@/lib/database-context";
+import { DatabaseInitialization } from "@/components/database-initialization";
 
 export default function Layout() {
   return (
     <>
       <Head>
-        <title>Gemma 3n Chat | AI Assistant</title>
+        <title>LOMA | Medical Knowledge Database</title>
         <meta
           name="description"
-          content="Local AI chat app powered by Gemma 3n language model"
+          content="Medical knowledge database with AI-powered search and chat functionality"
         />
       </Head>
-      <Slot />
+      <DatabaseProvider>
+        <DatabaseInitialization>
+          <Slot />
+        </DatabaseInitialization>
+      </DatabaseProvider>
     </>
   );
 }
