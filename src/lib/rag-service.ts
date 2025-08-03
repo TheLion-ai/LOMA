@@ -6,6 +6,7 @@
  */
 
 import { DocumentSearchResult, getTursoDBService } from "./turso-db-service";
+
 import {
   performMedicalSearch,
   hasQualityResults,
@@ -33,6 +34,7 @@ const DEFAULT_RAG_CONFIG: RAGConfig = {
 {answers}
 
 Please use this context to provide accurate medical information. Always cite sources [n] when referencing the provided context.
+
 
 USER QUESTION: {query}`,
 };
@@ -97,6 +99,7 @@ export class RAGService {
       // Extract sources for citation
       const sources = await this.extractSources(searchResults);
 
+
       // Log completion
       const duration = Date.now() - startTime;
       console.log(createSearchSummary(query, searchResults, duration));
@@ -140,6 +143,7 @@ export class RAGService {
       .slice(0, 10)
       .map((qa, index) => {
         const maxALength = 200;
+
         let answer = qa.answer;
         if (answer.length > maxALength) {
           answer = answer.substring(0, maxALength) + "...";
@@ -151,6 +155,7 @@ export class RAGService {
     let context = this.config.contextTemplate
       .replace("{answers}", answersSection || "No relevant passages found.")
       .replace("{query}", query);
+
 
     if (context.length > this.config.maxContextLength) {
       console.log(
@@ -209,6 +214,7 @@ export class RAGService {
     }
 
     return sources;
+
   }
 
   /**

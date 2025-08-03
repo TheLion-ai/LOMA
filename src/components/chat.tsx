@@ -305,7 +305,7 @@ export default function Chat({
             "I apologize, but I'm having trouble generating a proper response. Could you please rephrase your question?";
         }
 
-        // Don't append sources to response text anymore - they'll be displayed separately
+
       }
 
       // Update RAG status
