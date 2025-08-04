@@ -2,29 +2,32 @@ import React, { useEffect, useState } from "react";
 import {
   View,
   Text,
-  TextInput,
   TouchableOpacity,
   ScrollView,
   Alert,
 } from "react-native";
+import { Input } from "@/components/ui/input";
 import {
   useQueuedEmbeddingService,
   useEmbeddingModel,
 } from "../lib/embedding-service";
 import {
   getTursoDBService,
-  MedicalSearchOptions,
 } from "../lib/turso-db-service";
 import {
   performMedicalSearch,
   formatSearchResultsForDisplay,
 } from "../lib/search-utils";
 import { FormattedResult } from "../types/rag";
+import { useTheme } from "@/lib/theme-context";
+import { getCurrentTheme } from "@/lib/theme";
 
 /**
  * Demo component showing ExecuTorch embedding integration with TursoDBService
  */
 export default function EmbeddingDemo() {
+  const { isDark } = useTheme();
+  const colors = getCurrentTheme(isDark);
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState<FormattedResult[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -37,6 +40,147 @@ export default function EmbeddingDemo() {
 
   // Initialize the database service
   const dbService = getTursoDBService();
+
+  const dynamicStyles = {
+    container: {
+      flex: 1,
+      padding: 16,
+      backgroundColor: colors.background,
+    },
+    title: {
+      fontSize: 24,
+      fontWeight: "bold" as const,
+      marginBottom: 16,
+      color: colors.foreground,
+    },
+    sectionContainer: {
+      backgroundColor: colors.card,
+      padding: 16,
+      borderRadius: 8,
+      marginBottom: 24,
+      borderWidth: 1,
+      borderColor: colors.border,
+    },
+    sectionTitle: {
+      fontSize: 18,
+      fontWeight: "bold" as const,
+      marginBottom: 8,
+      color: colors.cardForeground,
+    },
+    statusText: {
+      fontSize: 14,
+      marginBottom: 4,
+      color: colors.mutedForeground,
+    },
+    inputContainer: {
+      marginBottom: 12,
+    },
+    buttonRow: {
+      flexDirection: "row" as const,
+      gap: 8,
+    },
+    buttonRowSingle: {
+      flexDirection: "row" as const,
+      marginTop: 8,
+      width: "100%" as const,
+    },
+    primaryButton: {
+      flex: 1,
+      backgroundColor: colors.primary,
+      padding: 12,
+      borderRadius: 8,
+      alignItems: "center" as const,
+    },
+    primaryButtonDisabled: {
+      backgroundColor: colors.muted,
+    },
+    secondaryButton: {
+      backgroundColor: colors.destructive,
+      padding: 12,
+      borderRadius: 8,
+      alignItems: "center" as const,
+      paddingHorizontal: 20,
+    },
+    warningButton: {
+      flex: 1,
+      backgroundColor: colors.accent,
+      padding: 12,
+      borderRadius: 8,
+      alignItems: "center" as const,
+      flexShrink: 1,
+    },
+    warningButtonDisabled: {
+      backgroundColor: colors.muted,
+    },
+    buttonText: {
+      color: colors.primaryForeground,
+      fontWeight: "bold" as const,
+    },
+    secondaryButtonText: {
+      color: colors.destructiveForeground,
+      fontWeight: "bold" as const,
+    },
+    warningButtonText: {
+      color: colors.accentForeground,
+      fontWeight: "bold" as const,
+    },
+    resultItem: {
+      borderWidth: 1,
+      borderColor: colors.border,
+      borderRadius: 8,
+      padding: 12,
+      marginBottom: 12,
+      backgroundColor: colors.muted,
+    },
+    resultHeader: {
+      flexDirection: "row" as const,
+      justifyContent: "space-between" as const,
+      marginBottom: 8,
+    },
+    resultTitle: {
+      fontSize: 16,
+      fontWeight: "bold" as const,
+      color: colors.foreground,
+    },
+    resultMetaRow: {
+      flexDirection: "row" as const,
+      alignItems: "center" as const,
+    },
+    resultType: {
+      fontSize: 12,
+      color: colors.mutedForeground,
+      marginRight: 8,
+    },
+    resultSimilarity: {
+      fontSize: 12,
+      color: colors.primary,
+      fontWeight: "bold" as const,
+    },
+    resultContent: {
+      fontSize: 14,
+      color: colors.mutedForeground,
+      marginBottom: 4,
+    },
+    resultFooter: {
+      flexDirection: "row" as const,
+      gap: 16,
+    },
+    resultFooterText: {
+      fontSize: 12,
+      color: colors.mutedForeground,
+    },
+    instructionsText: {
+      fontSize: 14,
+      color: colors.mutedForeground,
+      lineHeight: 20,
+    },
+    instructionsTextSpaced: {
+      fontSize: 14,
+      color: colors.mutedForeground,
+      lineHeight: 20,
+      marginTop: 8,
+    },
+  };
 
   useEffect(() => {
     // Only initialize database after embedding model is ready
@@ -142,175 +286,94 @@ export default function EmbeddingDemo() {
   };
 
   return (
-    <ScrollView style={{ flex: 1, padding: 16, backgroundColor: "#f5f5f5" }}>
-      <Text
-        style={{
-          fontSize: 24,
-          fontWeight: "bold",
-          marginBottom: 16,
-          color: "#333",
-        }}
-      >
+    <ScrollView style={dynamicStyles.container}>
+      <Text style={dynamicStyles.title}>
         ExecuTorch Embedding Demo
       </Text>
 
-      {/* Status Section */}
-      <View
-        style={{
-          backgroundColor: "#fff",
-          padding: 16,
-          borderRadius: 8,
-          marginBottom: 16,
-        }}
-      >
-        <Text
-          style={{
-            fontSize: 18,
-            fontWeight: "bold",
-            marginBottom: 8,
-            color: "#333",
-          }}
-        >
+      <View style={dynamicStyles.sectionContainer}>
+        <Text style={dynamicStyles.sectionTitle}>
           Status
         </Text>
-        <Text style={{ fontSize: 14, marginBottom: 4, color: "#666" }}>
+        <Text style={dynamicStyles.statusText}>
           Embedding Model: {modelStatus}
         </Text>
-        <Text style={{ fontSize: 14, color: "#666" }}>
+        <Text style={dynamicStyles.statusText}>
           Database: {dbStatus}
         </Text>
       </View>
 
-      {/* Search Section */}
-      <View
-        style={{
-          backgroundColor: "#fff",
-          padding: 16,
-          borderRadius: 8,
-          marginBottom: 16,
-        }}
-      >
-        <Text
-          style={{
-            fontSize: 18,
-            fontWeight: "bold",
-            marginBottom: 8,
-            color: "#333",
-          }}
-        >
+      <View style={dynamicStyles.sectionContainer}>
+        <Text style={dynamicStyles.sectionTitle}>
           Medical Search
         </Text>
-        <TextInput
-          style={{
-            borderWidth: 1,
-            borderColor: "#ddd",
-            borderRadius: 8,
-            padding: 12,
-            marginBottom: 12,
-            fontSize: 16,
-            backgroundColor: "#fafafa",
-          }}
+        <Input
+          style={dynamicStyles.inputContainer}
           placeholder="Enter your medical question or topic..."
           value={searchQuery}
           onChangeText={setSearchQuery}
           multiline
           numberOfLines={3}
         />
-        <View style={{ flexDirection: "row", gap: 8, marginBottom: 8 }}>
+        <View style={dynamicStyles.buttonRow}>
           <TouchableOpacity
-            style={{
-              flex: 1,
-              backgroundColor: embeddingModel.isReady ? "#007AFF" : "#ccc",
-              padding: 12,
-              borderRadius: 8,
-              alignItems: "center",
-            }}
+            style={[
+              dynamicStyles.primaryButton,
+              (!embeddingModel.isReady || isLoading) && dynamicStyles.primaryButtonDisabled,
+            ]}
             onPress={performSearch}
             disabled={!embeddingModel.isReady || isLoading}
           >
-            <Text style={{ color: "#fff", fontWeight: "bold" }}>
+            <Text style={dynamicStyles.buttonText}>
               {isLoading ? "Searching..." : "Search"}
             </Text>
           </TouchableOpacity>
           <TouchableOpacity
-            style={{
-              backgroundColor: "#FF3B30",
-              padding: 12,
-              borderRadius: 8,
-              alignItems: "center",
-            }}
+            style={dynamicStyles.secondaryButton}
             onPress={clearResults}
           >
-            <Text style={{ color: "#fff", fontWeight: "bold" }}>Clear</Text>
+            <Text style={dynamicStyles.secondaryButtonText}>Clear</Text>
           </TouchableOpacity>
         </View>
-        <View style={{ flexDirection: "row", gap: 8, marginTop: 8 }}>
+        <View style={dynamicStyles.buttonRowSingle}>
           <TouchableOpacity
-            style={{
-              flex: 1,
-              backgroundColor: "#FF9500",
-              padding: 12,
-              borderRadius: 8,
-              alignItems: "center",
-            }}
+            style={[
+              dynamicStyles.warningButton,
+              isLoading && dynamicStyles.warningButtonDisabled,
+              {
+                flex: 1,
+                alignItems: "center",
+              }
+            ]}
             onPress={debugDocuments}
             disabled={isLoading}
           >
-            <Text style={{ color: "#fff", fontWeight: "bold" }}>
+            <Text style={dynamicStyles.warningButtonText}>
               Debug Documents
             </Text>
           </TouchableOpacity>
         </View>
       </View>
 
-      {/* Results Section */}
       {searchResults.length > 0 && (
-        <View style={{ backgroundColor: "#fff", padding: 16, borderRadius: 8 }}>
-          <Text
-            style={{
-              fontSize: 18,
-              fontWeight: "bold",
-              marginBottom: 12,
-              color: "#333",
-            }}
-          >
+        <View style={dynamicStyles.sectionContainer}>
+          <Text style={dynamicStyles.sectionTitle}>
             Search Results ({searchResults.length})
           </Text>
           {searchResults.map((result, index) => (
             <View
               key={index}
-              style={{
-                borderWidth: 1,
-                borderColor: "#eee",
-                borderRadius: 8,
-                padding: 12,
-                marginBottom: 12,
-                backgroundColor: "#fafafa",
-              }}
+              style={dynamicStyles.resultItem}
             >
-              <View
-                style={{
-                  flexDirection: "row",
-                  justifyContent: "space-between",
-                  marginBottom: 8,
-                }}
-              >
-                <Text
-                  style={{ fontSize: 16, fontWeight: "bold", color: "#333" }}
-                >
+              <View style={dynamicStyles.resultHeader}>
+                <Text style={dynamicStyles.resultTitle}>
                   {result.title || "Untitled"}
                 </Text>
-                <View style={{ flexDirection: "row", alignItems: "center" }}>
-                  <Text style={{ fontSize: 12, color: "#666", marginRight: 8 }}>
+                <View style={dynamicStyles.resultMetaRow}>
+                  <Text style={dynamicStyles.resultType}>
                     {result.type || "Unknown"}
                   </Text>
-                  <Text
-                    style={{
-                      fontSize: 12,
-                      color: "#007AFF",
-                      fontWeight: "bold",
-                    }}
-                  >
+                  <Text style={dynamicStyles.resultSimilarity}>
                     {result.similarity
                       ? Math.round(result.similarity * 100)
                       : 0}
@@ -318,16 +381,16 @@ export default function EmbeddingDemo() {
                   </Text>
                 </View>
               </View>
-              <Text style={{ fontSize: 14, color: "#666", marginBottom: 4 }}>
+              <Text style={dynamicStyles.resultContent}>
                 {result.content && result.content.length > 200
                   ? `${result.content.substring(0, 200)}...`
                   : result.content || "No content available"}
               </Text>
-              <View style={{ flexDirection: "row", gap: 16 }}>
-                <Text style={{ fontSize: 12, color: "#999" }}>
+              <View style={dynamicStyles.resultFooter}>
+                <Text style={dynamicStyles.resultFooterText}>
                   Specialty: {result.specialty || "N/A"}
                 </Text>
-                <Text style={{ fontSize: 12, color: "#999" }}>
+                <Text style={dynamicStyles.resultFooterText}>
                   Year: {result.year || "N/A"}
                 </Text>
               </View>
@@ -336,33 +399,16 @@ export default function EmbeddingDemo() {
         </View>
       )}
 
-      {/* Instructions */}
-      <View
-        style={{
-          backgroundColor: "#fff",
-          padding: 16,
-          borderRadius: 8,
-          marginTop: 16,
-        }}
-      >
-        <Text
-          style={{
-            fontSize: 16,
-            fontWeight: "bold",
-            marginBottom: 8,
-            color: "#333",
-          }}
-        >
+      <View style={[dynamicStyles.sectionContainer, { marginTop: 16 }]}>
+        <Text style={dynamicStyles.sectionTitle}>
           How it works
         </Text>
-        <Text style={{ fontSize: 14, color: "#666", lineHeight: 20 }}>
+        <Text style={dynamicStyles.instructionsText}>
           This demo uses ExecuTorch's ALL-MiniLM-L6-v2 model to generate real
           text embeddings for semantic search. The embeddings are used to find
           similar medical documents and Q&A pairs in the Turso vector database.
         </Text>
-        <Text
-          style={{ fontSize: 14, color: "#666", lineHeight: 20, marginTop: 8 }}
-        >
+        <Text style={dynamicStyles.instructionsTextSpaced}>
           Try searching for medical topics like "heart disease", "diabetes
           treatment", or "cancer immunotherapy" to see how the semantic search
           works with real embeddings.

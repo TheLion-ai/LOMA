@@ -1,5 +1,6 @@
 import * as React from "react"
 import { View, Image, Text, ViewStyle, ImageStyle, TextStyle } from "react-native"
+import { getCurrentTheme } from "@/lib/theme"
 
 interface AvatarProps {
   style?: ViewStyle
@@ -71,7 +72,7 @@ const AvatarFallback = React.forwardRef<View, AvatarFallbackProps>(
           alignItems: 'center',
           justifyContent: 'center',
           borderRadius: 20,
-          backgroundColor: '#f1f5f9',
+          backgroundColor: getCurrentTheme(false).muted,
         },
         style,
       ]}
@@ -83,7 +84,7 @@ const AvatarFallback = React.forwardRef<View, AvatarFallbackProps>(
             {
               fontSize: 14,
               fontWeight: '500',
-              color: '#64748b',
+              color: getCurrentTheme(false).mutedForeground,
             },
             textStyle,
           ]}

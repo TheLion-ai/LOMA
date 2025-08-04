@@ -1,5 +1,6 @@
 import * as React from "react"
 import { View, StyleSheet, ViewStyle } from "react-native"
+import { getCurrentTheme, theme } from "@/lib/theme"
 
 export interface CardProps {
   children?: React.ReactNode
@@ -66,20 +67,22 @@ const CardContent = React.forwardRef<View, CardProps>(
 )
 CardContent.displayName = "CardContent"
 
+const colors = getCurrentTheme(false);
+
 const styles = StyleSheet.create({
   card: {
-    backgroundColor: '#ffffff',
-    borderRadius: 8,
+    backgroundColor: colors.card,
+    borderRadius: theme.borderRadius.lg,
     borderWidth: 1,
-    borderColor: '#e2e8f0',
+    borderColor: colors.border,
     shadowColor: '#000',
     shadowOffset: {
       width: 0,
-      height: 1,
+      height: 4,
     },
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
-    elevation: 1,
+    shadowOpacity: 0.12,
+    shadowRadius: 6,
+    elevation: 2,
   },
   cardHeader: {
     paddingHorizontal: 24,

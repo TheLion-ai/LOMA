@@ -1,8 +1,10 @@
 import React, { useState } from "react";
-import { View, Text, StyleSheet, ScrollView, Alert } from "react-native";
+import { View, Text, ScrollView, Alert, Switch } from "react-native";
 import { useDatabase } from "@/lib/database-context";
 import { DatabaseDownloadService } from "@/lib/database-download-service";
 import { Button } from "@/components/ui/button";
+import { useTheme } from "@/lib/theme-context";
+import { getCurrentTheme } from "@/lib/theme";
 
 export default function SettingsScreen() {
   const {
@@ -18,7 +20,169 @@ export default function SettingsScreen() {
     clearError,
   } = useDatabase();
 
+  const { isDark, toggleTheme } = useTheme();
+  const colors = getCurrentTheme(isDark);
   const [isRefreshing, setIsRefreshing] = useState(false);
+
+  // Create dynamic styles based on current theme
+  const dynamicStyles = {
+    container: {
+      flex: 1,
+      backgroundColor: colors.background,
+    },
+    content: {
+      padding: 20,
+    },
+    title: {
+      fontSize: 28,
+      fontWeight: "bold" as const,
+      color: colors.foreground,
+      marginBottom: 24,
+    },
+    section: {
+      backgroundColor: colors.card,
+      borderRadius: 12,
+      padding: 20,
+      marginBottom: 20,
+      shadowColor: "#000",
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.1,
+      shadowRadius: 4,
+      elevation: 3,
+      borderWidth: 1,
+      borderColor: colors.border,
+    },
+    sectionTitle: {
+      fontSize: 18,
+      fontWeight: "600" as const,
+      color: colors.cardForeground,
+      marginBottom: 16,
+    },
+    statusContainer: {
+      flexDirection: "row" as const,
+      justifyContent: "space-between" as const,
+      alignItems: "center" as const,
+      paddingVertical: 8,
+      borderBottomWidth: 1,
+      borderBottomColor: colors.border,
+    },
+    statusLabel: {
+      fontSize: 14,
+      color: colors.mutedForeground,
+      fontWeight: "500" as const,
+    },
+    statusValue: {
+      fontSize: 14,
+      fontWeight: "600" as const,
+      color: colors.foreground,
+    },
+    statusSuccess: {
+      color: colors.primary,
+    },
+    statusWarning: {
+      color: colors.destructive,
+    },
+    progressSection: {
+      marginTop: 16,
+      padding: 16,
+      backgroundColor: colors.muted,
+      borderRadius: 8,
+    },
+    progressTitle: {
+      fontSize: 14,
+      fontWeight: "600" as const,
+      color: colors.foreground,
+      marginBottom: 8,
+    },
+    progressBar: {
+      width: "100%" as const,
+      height: 6,
+      backgroundColor: colors.secondary,
+      borderRadius: 3,
+      overflow: "hidden" as const,
+      marginBottom: 8,
+    },
+    progressFill: {
+      height: "100%" as const,
+      backgroundColor: colors.primary,
+    },
+    progressText: {
+      fontSize: 12,
+      color: colors.foreground,
+      marginBottom: 4,
+    },
+    progressDetail: {
+      fontSize: 11,
+      color: colors.mutedForeground,
+    },
+    errorContainer: {
+      marginTop: 16,
+      padding: 12,
+      backgroundColor: colors.destructive + "20", // Adding transparency
+      borderRadius: 8,
+      borderWidth: 1,
+      borderColor: colors.destructive + "40",
+    },
+    errorText: {
+      fontSize: 14,
+      color: colors.destructive,
+      marginBottom: 8,
+    },
+    clearErrorButton: {
+      backgroundColor: colors.destructive,
+      paddingHorizontal: 16,
+      paddingVertical: 6,
+      borderRadius: 6,
+      alignSelf: "flex-start" as const,
+    },
+    buttonGroup: {
+      marginTop: 20,
+      gap: 12,
+    },
+    button: {
+      backgroundColor: colors.primary,
+      paddingVertical: 12,
+      paddingHorizontal: 20,
+      borderRadius: 8,
+      alignItems: "center" as const,
+    },
+    secondaryButton: {
+      backgroundColor: colors.secondary,
+    },
+    cancelButton: {
+      backgroundColor: colors.destructive,
+    },
+    dangerButton: {
+      backgroundColor: colors.destructive,
+    },
+    buttonText: {
+      color: colors.primaryForeground,
+      fontSize: 14,
+      fontWeight: "600" as const,
+    },
+    secondaryButtonText: {
+      color: colors.secondaryForeground,
+      fontSize: 14,
+      fontWeight: "600" as const,
+    },
+    aboutText: {
+      fontSize: 14,
+      color: colors.mutedForeground,
+      lineHeight: 20,
+      marginBottom: 8,
+    },
+    themeToggleContainer: {
+      flexDirection: "row" as const,
+      justifyContent: "space-between" as const,
+      alignItems: "center" as const,
+      paddingVertical: 12,
+    },
+    themeToggleLabel: {
+      fontSize: 16,
+      color: colors.foreground,
+      fontWeight: "500" as const,
+    },
+  };
 
   const handleRefreshStatus = async () => {
     setIsRefreshing(true);
@@ -61,23 +225,37 @@ export default function SettingsScreen() {
   };
 
   return (
-    <ScrollView style={styles.container}>
-      <View style={styles.content}>
-        <Text style={styles.title}>Settings</Text>
+    <ScrollView style={dynamicStyles.container}>
+      <View style={dynamicStyles.content}>
+        <Text style={dynamicStyles.title}>Settings</Text>
+
+        {/* Theme Section */}
+        <View style={dynamicStyles.section}>
+          <Text style={dynamicStyles.sectionTitle}>Appearance</Text>
+          <View style={dynamicStyles.themeToggleContainer}>
+            <Text style={dynamicStyles.themeToggleLabel}>Dark Mode</Text>
+            <Switch
+              value={isDark}
+              onValueChange={toggleTheme}
+              trackColor={{ false: colors.muted, true: colors.primary }}
+              thumbColor={isDark ? colors.primaryForeground : colors.foreground}
+            />
+          </View>
+        </View>
 
         {/* Database Section */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Database Management</Text>
+        <View style={dynamicStyles.section}>
+          <Text style={dynamicStyles.sectionTitle}>Database Management</Text>
 
           {/* Database Status */}
-          <View style={styles.statusContainer}>
-            <Text style={styles.statusLabel}>Status:</Text>
+          <View style={dynamicStyles.statusContainer}>
+            <Text style={dynamicStyles.statusLabel}>Status:</Text>
             <Text
               style={[
-                styles.statusValue,
+                dynamicStyles.statusValue,
                 isDatabaseAvailable
-                  ? styles.statusSuccess
-                  : styles.statusWarning,
+                  ? dynamicStyles.statusSuccess
+                  : dynamicStyles.statusWarning,
               ]}
             >
               {isDatabaseAvailable
@@ -88,9 +266,9 @@ export default function SettingsScreen() {
 
           {databaseStatus && (
             <>
-              <View style={styles.statusContainer}>
-                <Text style={styles.statusLabel}>File Size:</Text>
-                <Text style={styles.statusValue}>
+              <View style={dynamicStyles.statusContainer}>
+                <Text style={dynamicStyles.statusLabel}>File Size:</Text>
+                <Text style={dynamicStyles.statusValue}>
                   {databaseStatus.fileSize
                     ? DatabaseDownloadService.formatBytes(
                         databaseStatus.fileSize
@@ -100,9 +278,9 @@ export default function SettingsScreen() {
               </View>
 
               {databaseStatus.lastModified && (
-                <View style={styles.statusContainer}>
-                  <Text style={styles.statusLabel}>Last Updated:</Text>
-                  <Text style={styles.statusValue}>
+                <View style={dynamicStyles.statusContainer}>
+                  <Text style={dynamicStyles.statusLabel}>Last Updated:</Text>
+                  <Text style={dynamicStyles.statusValue}>
                     {databaseStatus.lastModified.toLocaleDateString()}
                   </Text>
                 </View>
@@ -112,19 +290,19 @@ export default function SettingsScreen() {
 
           {/* Download Progress */}
           {downloadState === "downloading" && downloadProgress && (
-            <View style={styles.progressSection}>
-              <Text style={styles.progressTitle}>Download Progress</Text>
+            <View style={dynamicStyles.progressSection}>
+              <Text style={dynamicStyles.progressTitle}>Download Progress</Text>
 
-              <View style={styles.progressBar}>
+              <View style={dynamicStyles.progressBar}>
                 <View
                   style={[
-                    styles.progressFill,
+                    dynamicStyles.progressFill,
                     { width: `${downloadProgress.percentage}%` },
                   ]}
                 />
               </View>
 
-              <Text style={styles.progressText}>
+              <Text style={dynamicStyles.progressText}>
                 {downloadProgress.percentage.toFixed(1)}% -{" "}
                 {DatabaseDownloadService.formatBytes(
                   downloadProgress.totalBytesWritten
@@ -136,7 +314,7 @@ export default function SettingsScreen() {
               </Text>
 
               {downloadProgress.speedBps && (
-                <Text style={styles.progressDetail}>
+                <Text style={dynamicStyles.progressDetail}>
                   Speed:{" "}
                   {DatabaseDownloadService.formatBytes(
                     downloadProgress.speedBps
@@ -146,7 +324,7 @@ export default function SettingsScreen() {
               )}
 
               {downloadProgress.estimatedTimeRemaining && (
-                <Text style={styles.progressDetail}>
+                <Text style={dynamicStyles.progressDetail}>
                   Time remaining:{" "}
                   {DatabaseDownloadService.formatTime(
                     downloadProgress.estimatedTimeRemaining
@@ -158,22 +336,22 @@ export default function SettingsScreen() {
 
           {/* Error Display */}
           {error && (
-            <View style={styles.errorContainer}>
-              <Text style={styles.errorText}>{error}</Text>
-              <Button onPress={clearError} style={styles.clearErrorButton}>
-                <Text style={styles.buttonText}>Clear Error</Text>
+            <View style={dynamicStyles.errorContainer}>
+              <Text style={dynamicStyles.errorText}>{error}</Text>
+              <Button onPress={clearError} style={dynamicStyles.clearErrorButton}>
+                <Text style={dynamicStyles.buttonText}>Clear Error</Text>
               </Button>
             </View>
           )}
 
           {/* Action Buttons */}
-          <View style={styles.buttonGroup}>
+          <View style={dynamicStyles.buttonGroup}>
             <Button
               onPress={handleRefreshStatus}
               disabled={isRefreshing}
-              style={{ ...styles.button, ...styles.secondaryButton }}
+              style={{ ...dynamicStyles.button, ...dynamicStyles.secondaryButton }}
             >
-              <Text style={styles.buttonText}>
+              <Text style={dynamicStyles.secondaryButtonText}>
                 {isRefreshing ? "Refreshing..." : "Refresh Status"}
               </Text>
             </Button>
@@ -181,24 +359,24 @@ export default function SettingsScreen() {
             {downloadState === "downloading" ? (
               <Button
                 onPress={cancelDownload}
-                style={{ ...styles.button, ...styles.cancelButton }}
+                style={{ ...dynamicStyles.button, ...dynamicStyles.cancelButton }}
               >
-                <Text style={styles.buttonText}>Cancel Download</Text>
+                <Text style={dynamicStyles.buttonText}>Cancel Download</Text>
               </Button>
             ) : (
               <>
                 {!isDatabaseAvailable && (
-                  <Button onPress={handleStartDownload} style={styles.button}>
-                    <Text style={styles.buttonText}>Download Database</Text>
+                  <Button onPress={handleStartDownload} style={dynamicStyles.button}>
+                    <Text style={dynamicStyles.buttonText}>Download Database</Text>
                   </Button>
                 )}
 
                 {databaseStatus?.exists && (
                   <Button
                     onPress={handleResetDatabase}
-                    style={{ ...styles.button, ...styles.dangerButton }}
+                    style={{ ...dynamicStyles.button, ...dynamicStyles.dangerButton }}
                   >
-                    <Text style={styles.buttonText}>Reset Database</Text>
+                    <Text style={dynamicStyles.buttonText}>Reset Database</Text>
                   </Button>
                 )}
               </>
@@ -207,13 +385,13 @@ export default function SettingsScreen() {
         </View>
 
         {/* App Information */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>About</Text>
-          <Text style={styles.aboutText}>
+        <View style={dynamicStyles.section}>
+          <Text style={dynamicStyles.sectionTitle}>About</Text>
+          <Text style={dynamicStyles.aboutText}>
             LOMA is a medical knowledge database application with AI-powered
             search and chat functionality.
           </Text>
-          <Text style={styles.aboutText}>
+          <Text style={dynamicStyles.aboutText}>
             The application uses a large medical database containing clinical
             documents, Q&A pairs, and other medical resources.
           </Text>
@@ -223,142 +401,4 @@ export default function SettingsScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: "#f8f9fa",
-  },
-  content: {
-    padding: 20,
-  },
-  title: {
-    fontSize: 28,
-    fontWeight: "bold",
-    color: "#1a1a1a",
-    marginBottom: 24,
-  },
-  section: {
-    backgroundColor: "#ffffff",
-    borderRadius: 12,
-    padding: 20,
-    marginBottom: 20,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  sectionTitle: {
-    fontSize: 18,
-    fontWeight: "600",
-    color: "#1a1a1a",
-    marginBottom: 16,
-  },
-  statusContainer: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    paddingVertical: 8,
-    borderBottomWidth: 1,
-    borderBottomColor: "#f3f4f6",
-  },
-  statusLabel: {
-    fontSize: 14,
-    color: "#6b7280",
-    fontWeight: "500",
-  },
-  statusValue: {
-    fontSize: 14,
-    fontWeight: "600",
-  },
-  statusSuccess: {
-    color: "#059669",
-  },
-  statusWarning: {
-    color: "#d97706",
-  },
-  progressSection: {
-    marginTop: 16,
-    padding: 16,
-    backgroundColor: "#f9fafb",
-    borderRadius: 8,
-  },
-  progressTitle: {
-    fontSize: 14,
-    fontWeight: "600",
-    color: "#1a1a1a",
-    marginBottom: 8,
-  },
-  progressBar: {
-    width: "100%",
-    height: 6,
-    backgroundColor: "#e5e7eb",
-    borderRadius: 3,
-    overflow: "hidden",
-    marginBottom: 8,
-  },
-  progressFill: {
-    height: "100%",
-    backgroundColor: "#0066cc",
-  },
-  progressText: {
-    fontSize: 12,
-    color: "#374151",
-    marginBottom: 4,
-  },
-  progressDetail: {
-    fontSize: 11,
-    color: "#6b7280",
-  },
-  errorContainer: {
-    marginTop: 16,
-    padding: 12,
-    backgroundColor: "#fef2f2",
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: "#fecaca",
-  },
-  errorText: {
-    fontSize: 14,
-    color: "#dc2626",
-    marginBottom: 8,
-  },
-  clearErrorButton: {
-    backgroundColor: "#dc2626",
-    paddingHorizontal: 16,
-    paddingVertical: 6,
-    borderRadius: 6,
-    alignSelf: "flex-start",
-  },
-  buttonGroup: {
-    marginTop: 20,
-    gap: 12,
-  },
-  button: {
-    backgroundColor: "#0066cc",
-    paddingVertical: 12,
-    paddingHorizontal: 20,
-    borderRadius: 8,
-    alignItems: "center",
-  },
-  secondaryButton: {
-    backgroundColor: "#6b7280",
-  },
-  cancelButton: {
-    backgroundColor: "#dc2626",
-  },
-  dangerButton: {
-    backgroundColor: "#dc2626",
-  },
-  buttonText: {
-    color: "#ffffff",
-    fontSize: 14,
-    fontWeight: "600",
-  },
-  aboutText: {
-    fontSize: 14,
-    color: "#6b7280",
-    lineHeight: 20,
-    marginBottom: 8,
-  },
-});
+
