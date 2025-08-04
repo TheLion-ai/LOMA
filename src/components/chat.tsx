@@ -48,7 +48,6 @@ export default function Chat({
     message: "",
     isLoading: false,
   });
-  const [lastSources, setLastSources] = useState<Source[]>([]);
 
   useEffect(() => {
     initializeAI();
@@ -126,6 +125,7 @@ export default function Chat({
             Platform.OS === "web"
               ? "Hello! I'm Gemma 3n running with Transformers.js in your browser. How can I help you today?"
               : `Hello! I'm Gemma 3n, your AI assistant running natively on ${Platform.OS}. How can I help you today?`,
+          sources: undefined,
         };
         onMessagesChange([welcomeMessage]);
       }
@@ -143,6 +143,7 @@ export default function Chat({
             Platform.OS === "web"
               ? "Hello! I'm running in demo mode. The AI model failed to load, but you can still test the chat interface!"
               : "Hello! I'm running in demo mode. There was an issue loading the AI model. You can still test the interface, but responses will be simulated.",
+          sources: undefined,
         };
         onMessagesChange([errorMessage]);
       }
@@ -318,12 +319,10 @@ export default function Chat({
         isLoading: false,
       });
 
-      // Store sources for display
-      setLastSources(sources);
-
       const assistantMessage: ChatMessage = {
         role: "assistant",
         content: responseText,
+        sources: sources.length > 0 ? sources : undefined,
       };
 
       const finalMessages = [...newMessages, assistantMessage];
@@ -354,6 +353,7 @@ export default function Chat({
         role: "assistant",
         content:
           "Sorry, I encountered an error while processing your message. Please try again.",
+        sources: undefined,
       };
       onMessagesChange([...newMessages, errorMessage]);
 
@@ -487,11 +487,11 @@ export default function Chat({
                 </View>
               </View>
             </View>
-            {/* Show sources for the last assistant message */}
+            {/* Show sources for assistant messages that have them */}
             {message.role === "assistant" &&
-              index === messages.length - 1 &&
-              lastSources.length > 0 && (
-                <SourcesDisplay sources={lastSources} />
+              message.sources &&
+              message.sources.length > 0 && (
+                <SourcesDisplay sources={message.sources} />
               )}
           </View>
         ))}
