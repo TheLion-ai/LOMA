@@ -1,5 +1,5 @@
 import "react-native-gesture-handler";
-import "@/global.css";
+
 import { Slot } from "expo-router";
 import Head from "expo-router/head";
 import { DatabaseProvider } from "@/lib/database-context";
