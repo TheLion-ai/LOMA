@@ -7,7 +7,9 @@ import {
   TouchableOpacity,
   TextInput,
   Platform,
+  Linking,
 } from "react-native";
+import Markdown from "react-native-markdown-display";
 import { Avatar } from "@/components/ui/avatar";
 import { Separator } from "@/components/ui/separator";
 import { SourcesDisplay } from "@/components/sources-display";
@@ -46,7 +48,6 @@ export default function Chat({
     message: "",
     isLoading: false,
   });
-  const [lastSources, setLastSources] = useState<Source[]>([]);
 
   useEffect(() => {
     initializeAI();
@@ -124,6 +125,7 @@ export default function Chat({
             Platform.OS === "web"
               ? "Hello! I'm Gemma 3n running with Transformers.js in your browser. How can I help you today?"
               : `Hello! I'm Gemma 3n, your AI assistant running natively on ${Platform.OS}. How can I help you today?`,
+          sources: undefined,
         };
         onMessagesChange([welcomeMessage]);
       }
@@ -141,6 +143,7 @@ export default function Chat({
             Platform.OS === "web"
               ? "Hello! I'm running in demo mode. The AI model failed to load, but you can still test the chat interface!"
               : "Hello! I'm running in demo mode. There was an issue loading the AI model. You can still test the interface, but responses will be simulated.",
+          sources: undefined,
         };
         onMessagesChange([errorMessage]);
       }
@@ -304,8 +307,6 @@ export default function Chat({
           responseText =
             "I apologize, but I'm having trouble generating a proper response. Could you please rephrase your question?";
         }
-
-
       }
 
       // Update RAG status
@@ -318,12 +319,10 @@ export default function Chat({
         isLoading: false,
       });
 
-      // Store sources for display
-      setLastSources(sources);
-
       const assistantMessage: ChatMessage = {
         role: "assistant",
         content: responseText,
+        sources: sources.length > 0 ? sources : undefined,
       };
 
       const finalMessages = [...newMessages, assistantMessage];
@@ -354,6 +353,7 @@ export default function Chat({
         role: "assistant",
         content:
           "Sorry, I encountered an error while processing your message. Please try again.",
+        sources: undefined,
       };
       onMessagesChange([...newMessages, errorMessage]);
 
@@ -454,25 +454,45 @@ export default function Chat({
                       : styles.assistantBubble,
                   ]}
                 >
-                  <Text
-                    style={[
-                      styles.messageText,
-                      message.role === "user"
-                        ? styles.userText
-                        : styles.assistantText,
-                    ]}
-                  >
-                    {message.content}
-                  </Text>
+                  {message.role === "assistant" ? (
+                    <Markdown
+                      style={{
+                        body: {
+                          color: styles.assistantText.color,
+                          fontSize: styles.messageText.fontSize,
+                        },
+                        link: {
+                          color: "#3B82F6",
+                          textDecorationLine: "underline",
+                        },
+                        paragraph: {
+                          marginTop: 0,
+                          marginBottom: 0,
+                        },
+                      }}
+                      onLinkPress={(url) => {
+                        Linking.openURL(url).catch((err) =>
+                          console.error("Failed to open URL:", err)
+                        );
+                        return true;
+                      }}
+                    >
+                      {message.content}
+                    </Markdown>
+                  ) : (
+                    <Text style={[styles.messageText, styles.userText]}>
+                      {message.content}
+                    </Text>
+                  )}
                 </View>
               </View>
             </View>
-            {/* Show sources for the last assistant message */}
-            {message.role === "assistant" && 
-             index === messages.length - 1 && 
-             lastSources.length > 0 && (
-              <SourcesDisplay sources={lastSources} />
-            )}
+            {/* Show sources for assistant messages that have them */}
+            {message.role === "assistant" &&
+              message.sources &&
+              message.sources.length > 0 && (
+                <SourcesDisplay sources={message.sources} />
+              )}
           </View>
         ))}
 
@@ -516,10 +536,41 @@ export default function Chat({
                     styles.streamingBubble,
                   ]}
                 >
-                  <Text style={[styles.messageText, styles.assistantText]}>
-                    {streamingMessage || ".".repeat(dotCount)}
-                    {streamingMessage && <Text style={styles.cursor}>▊</Text>}
-                  </Text>
+                  {streamingMessage ? (
+                    <View
+                      style={{ flexDirection: "row", alignItems: "flex-end" }}
+                    >
+                      <Markdown
+                        style={{
+                          body: {
+                            color: styles.assistantText.color,
+                            fontSize: styles.messageText.fontSize,
+                          },
+                          link: {
+                            color: "#3B82F6",
+                            textDecorationLine: "underline",
+                          },
+                          paragraph: {
+                            marginTop: 0,
+                            marginBottom: 0,
+                          },
+                        }}
+                        onLinkPress={(url) => {
+                          Linking.openURL(url).catch((err) =>
+                            console.error("Failed to open URL:", err)
+                          );
+                          return true;
+                        }}
+                      >
+                        {streamingMessage}
+                      </Markdown>
+                      <Text style={styles.cursor}>▊</Text>
+                    </View>
+                  ) : (
+                    <Text style={[styles.messageText, styles.assistantText]}>
+                      {".".repeat(dotCount)}
+                    </Text>
+                  )}
                 </View>
               </View>
             </View>
