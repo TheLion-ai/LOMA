@@ -33,6 +33,7 @@
     "react-native-executorch": "^0.4.8",
     "react-native-fs": "^2.20.0",
     "react-native-gesture-handler": "~2.24.0",
+    "react-native-markdown-display": "^7.0.2",
     "react-native-reanimated": "~3.17.4",
     "react-native-safe-area-context": "5.4.0",
     "react-native-screens": "~4.11.1",

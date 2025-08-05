@@ -1,10 +1,12 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { Source } from "@/types/rag";
 
 const CHATS_KEY = "chats";
 
 export interface ChatMessage {
   role: "user" | "assistant";
   content: string;
+  sources?: Source[]; // Sources for AI responses with RAG
 }
 
 export interface Chat {
