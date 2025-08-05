@@ -1,36 +1,36 @@
 /**
- * Embedding Service using ExecuTorch React Native
+ * Web-specific Embedding Service
  * 
- * Provides text embedding functionality using the ALL_MINILM_L6_V2 model
- * for generating vector representations of text for semantic search.
+ * Provides mock embedding functionality for web platform
+ * since react-native-executorch is not available on web.
  */
 
 import React from 'react';
-import {
-  useTextEmbeddings,
-  ALL_MINILM_L6_V2,
-  ALL_MINILM_L6_V2_TOKENIZER,
-} from 'react-native-executorch';
+
+// Mock implementation for web
+const mockEmbeddingModel = {
+  isReady: true,
+  isGenerating: false,
+  error: null,
+  downloadProgress: 100,
+  forward: async (text: string): Promise<number[]> => {
+    // Return a mock embedding vector for web
+    console.warn('Using mock embedding service on web platform');
+    // Simulate some processing time
+    await new Promise(resolve => setTimeout(resolve, 100));
+    return new Array(384).fill(0).map(() => Math.random() - 0.5);
+  }
+};
 
 /**
- * React hook for using the ExecuTorch text embeddings model
- * This hook should be used within React components that need embedding functionality
+ * React hook for using the mock text embeddings model on web
  */
 export function useEmbeddingModel() {
-  const model = useTextEmbeddings({
-    modelSource: ALL_MINILM_L6_V2,
-    tokenizerSource: ALL_MINILM_L6_V2_TOKENIZER,
-  });
+  const [model] = React.useState(mockEmbeddingModel);
 
-  // Add some debugging information
   React.useEffect(() => {
-    if (model.error) {
-      console.error('Embedding model error:', model.error);
-    }
-    if (model.isReady) {
-      console.log('Embedding model is ready for use');
-    }
-  }, [model.error, model.isReady]);
+    console.log('Mock embedding model is ready for use on web');
+  }, []);
 
   return model;
 }
@@ -45,9 +45,9 @@ class QueuedEmbeddingService {
     reject: (error: Error) => void;
   }> = [];
   private isProcessing = false;
-  private model: ReturnType<typeof useTextEmbeddings> | null = null;
+  private model: typeof mockEmbeddingModel = mockEmbeddingModel;
 
-  setModel(model: ReturnType<typeof useTextEmbeddings>) {
+  setModel(model: typeof mockEmbeddingModel) {
     this.model = model;
   }
 
@@ -69,23 +69,17 @@ class QueuedEmbeddingService {
       const { text, resolve, reject } = this.queue.shift()!;
 
       try {
-        // Wait if the model is currently generating
-        while (this.model.isGenerating) {
-          console.log('Model is generating, waiting...');
-          await new Promise(resolve => setTimeout(resolve, 100));
-        }
-
-        console.log(`Generating embedding for: "${text.substring(0, 50)}${text.length > 50 ? '...' : ''}"`);
+        console.log(`Generating mock embedding for: "${text.substring(0, 50)}${text.length > 50 ? '...' : ''}"`); 
         const embedding = await this.model.forward(text);
         
         if (!embedding || !Array.isArray(embedding) || embedding.length === 0) {
           throw new Error('Generated embedding is invalid or empty');
         }
 
-        console.log(`Generated embedding with ${embedding.length} dimensions`);
+        console.log(`Generated mock embedding with ${embedding.length} dimensions`);
         resolve(embedding);
       } catch (error) {
-        console.error('Failed to generate embedding:', error);
+        console.error('Failed to generate mock embedding:', error);
         reject(new Error(`Failed to generate embedding: ${error instanceof Error ? error.message : String(error)}`));
       }
     }
@@ -120,12 +114,9 @@ export function useQueuedEmbeddingService() {
 
 /**
  * Utility function to generate embeddings using the provided model
- * @param model - The embedding model from useEmbeddingModel hook
- * @param text - The text to generate an embedding for
- * @returns Promise that resolves to the embedding vector
  */
 export async function generateEmbedding(
-  model: ReturnType<typeof useTextEmbeddings>,
+  model: typeof mockEmbeddingModel,
   text: string
 ): Promise<number[]> {
   if (!model.isReady) {
@@ -137,7 +128,7 @@ export async function generateEmbedding(
   }
 
   try {
-    console.log(`Generating embedding for text: "${text.substring(0, 50)}${text.length > 50 ? '...' : ''}"`);
+    console.log(`Generating mock embedding for text: "${text.substring(0, 50)}${text.length > 50 ? '...' : ''}"`); 
     
     const embedding = await model.forward(text);
     
@@ -145,22 +136,19 @@ export async function generateEmbedding(
       throw new Error('Generated embedding is invalid or empty');
     }
 
-    console.log(`Generated embedding with ${embedding.length} dimensions`);
+    console.log(`Generated mock embedding with ${embedding.length} dimensions`);
     return embedding;
   } catch (error) {
-    console.error('Error generating embedding:', error);
+    console.error('Error generating mock embedding:', error);
     throw new Error(`Failed to generate embedding: ${error instanceof Error ? error.message : String(error)}`);
   }
 }
 
 /**
  * Utility function to generate embeddings for multiple texts
- * @param model - The embedding model from useEmbeddingModel hook
- * @param texts - Array of texts to generate embeddings for
- * @returns Promise that resolves to an array of embedding vectors
  */
 export async function generateEmbeddings(
-  model: ReturnType<typeof useTextEmbeddings>,
+  model: typeof mockEmbeddingModel,
   texts: string[]
 ): Promise<number[][]> {
   if (!model.isReady) {
@@ -172,7 +160,7 @@ export async function generateEmbeddings(
   }
 
   try {
-    console.log(`Generating embeddings for ${texts.length} texts`);
+    console.log(`Generating mock embeddings for ${texts.length} texts`);
     
     const embeddings: number[][] = [];
     
@@ -186,10 +174,10 @@ export async function generateEmbeddings(
       embeddings.push(embedding);
     }
 
-    console.log(`Generated ${embeddings.length} embeddings successfully`);
+    console.log(`Generated ${embeddings.length} mock embeddings successfully`);
     return embeddings;
   } catch (error) {
-    console.error('Error generating embeddings:', error);
+    console.error('Error generating mock embeddings:', error);
     throw new Error(`Failed to generate embeddings: ${error instanceof Error ? error.message : String(error)}`);
   }
 }

@@ -18,6 +18,7 @@ import { ChatMessage, Chat as ChatType } from "@/lib/chat-storage";
 import { getRAGService } from "@/lib/rag-service";
 import { RAGSearchStatus, Source } from "@/types/rag";
 import { useTheme } from "@/lib/theme-context";
+import { useSettings } from "@/lib/settings-context";
 import { getCurrentTheme } from "@/lib/theme";
 
 interface ChatProps {
@@ -34,6 +35,7 @@ export default function Chat({
   onTitleChange,
 }: ChatProps) {
   const { isDark } = useTheme();
+  const { maxRagResults } = useSettings();
   const colors = getCurrentTheme(isDark);
   const [inputText, setInputText] = useState("");
   const [isModelReady, setIsModelReady] = useState(false);
@@ -387,7 +389,7 @@ export default function Chat({
           isLoading: true,
         });
 
-        const ragService = getRAGService();
+        const ragService = getRAGService(maxRagResults);
         let ragResult;
 
         try {

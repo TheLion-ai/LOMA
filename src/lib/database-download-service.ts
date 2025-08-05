@@ -9,7 +9,7 @@ import { Platform } from "react-native";
 
 // Configuration constants
 const DATABASE_URL =
-  "https://pub-c2fb3b24963f467199aa6f728b231e0f.r2.dev/miriad_medical_minlm.db";
+  "https://pub-c2fb3b24963f467199aa6f728b231e0f.r2.dev/miriad_medical_minlm_500k_noidx.db";
 const LOCAL_DB_FILENAME = "miriad_medical.db";
 
 /**

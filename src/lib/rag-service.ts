@@ -19,11 +19,12 @@ import {
   RAGConfig,
   CombinedSearchResult,
 } from "../types/rag";
+import { DEFAULT_VALUES } from "./settings-context";
 
-// Default RAG configuration
-const DEFAULT_RAG_CONFIG: RAGConfig = {
+// Default RAG configuration factory
+const createDefaultRAGConfig = (maxResults?: number): RAGConfig => ({
   defaultSearchOptions: {
-    limit: 5,
+    limit: maxResults || DEFAULT_VALUES.MAX_RAG_RESULTS,
     threshold: 0.3,
     includeQA: true,
   },
@@ -37,7 +38,7 @@ Please use this context to provide accurate medical information. Always cite sou
 
 
 USER QUESTION: {query}`,
-};
+});
 
 /**
  * RAG Service class for managing retrieval-augmented generation
@@ -45,8 +46,16 @@ USER QUESTION: {query}`,
 export class RAGService {
   private config: RAGConfig;
 
-  constructor(config: Partial<RAGConfig> = {}) {
-    this.config = { ...DEFAULT_RAG_CONFIG, ...config };
+  constructor(config: Partial<RAGConfig> = {}, maxResults?: number) {
+    this.config = { ...createDefaultRAGConfig(maxResults), ...config };
+  }
+
+  /**
+   * Updates the max results limit for searches
+   * @param maxResults New maximum number of results
+   */
+  updateMaxResults(maxResults: number): void {
+    this.config.defaultSearchOptions.limit = maxResults;
   }
 
   /**
@@ -280,11 +289,14 @@ let ragServiceInstance: RAGService | null = null;
 
 /**
  * Gets the global RAG service instance
+ * @param maxResults Optional max results override
  * @returns RAG service instance
  */
-export function getRAGService(): RAGService {
+export function getRAGService(maxResults?: number): RAGService {
   if (!ragServiceInstance) {
-    ragServiceInstance = new RAGService();
+    ragServiceInstance = new RAGService({}, maxResults);
+  } else if (maxResults !== undefined) {
+    ragServiceInstance.updateMaxResults(maxResults);
   }
   return ragServiceInstance;
 }
