@@ -52,6 +52,7 @@ export interface DatabaseStatus {
 export type DownloadState =
   | "idle"
   | "downloading"
+  | "paused"
   | "completed"
   | "error"
   | "cancelled";
@@ -311,7 +312,10 @@ export class DatabaseDownloadService {
    * Cancels the current download
    */
   async cancelDownload(): Promise<void> {
-    if (this.downloadTask && this.downloadState === "downloading") {
+    if (
+      this.downloadTask &&
+      (this.downloadState === "downloading" || this.downloadState === "paused")
+    ) {
       try {
         await this.downloadTask.cancelAsync();
         this.downloadState = "cancelled";
@@ -320,6 +324,61 @@ export class DatabaseDownloadService {
         console.error("Error cancelling download:", error);
       } finally {
         this.downloadTask = null;
+      }
+    }
+  }
+
+  /**
+   * Pauses the current download
+   */
+  async pauseDownload(): Promise<void> {
+    if (this.downloadTask && this.downloadState === "downloading") {
+      try {
+        await this.downloadTask.pauseAsync();
+        this.downloadState = "paused";
+        console.log("Database download paused");
+      } catch (error) {
+        console.error("Error pausing download:", error);
+        throw error;
+      }
+    }
+  }
+
+  /**
+   * Resumes a paused download
+   */
+  async resumeDownload(): Promise<void> {
+    if (this.downloadTask && this.downloadState === "paused") {
+      try {
+        this.downloadState = "downloading";
+        const result = await this.downloadTask.resumeAsync();
+
+        if (result && result.status === 200) {
+          this.downloadState = "completed";
+          console.log("Database download completed successfully");
+
+          // Validate the downloaded file
+          const localPath = this.getLocalDatabasePath();
+          const isValid = await this.validateDatabaseFile(localPath);
+          if (!isValid) {
+            throw new Error(
+              "Downloaded database file appears to be corrupted or invalid"
+            );
+          }
+
+          this.completeCallback?.();
+        } else {
+          throw new Error(
+            `Download failed with status: ${result?.status || "unknown"}`
+          );
+        }
+      } catch (error) {
+        this.downloadState = "error";
+        const downloadError =
+          error instanceof Error ? error : new Error(String(error));
+        console.error("Database download resume failed:", downloadError);
+        this.errorCallback?.(downloadError);
+        throw downloadError;
       }
     }
   }

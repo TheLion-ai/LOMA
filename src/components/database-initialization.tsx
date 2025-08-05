@@ -92,74 +92,9 @@ export function DatabaseInitialization({
     );
   }
 
-  // Show download progress screen
+  // Allow the main app to show during downloading (progress will be shown in settings)
   if (initState === "downloading") {
-    return (
-      <View style={styles.container}>
-        <Text style={styles.title}>Downloading Database</Text>
-        <Text style={styles.subtitle}>
-          Please wait while the database is downloaded...
-        </Text>
-
-        {downloadProgress && (
-          <View style={styles.progressContainer}>
-            <View style={styles.progressBar}>
-              <View
-                style={[
-                  styles.progressFill,
-                  { width: `${downloadProgress.percentage}%` },
-                ]}
-              />
-            </View>
-            <Text style={styles.progressText}>
-              {downloadProgress.percentage.toFixed(1)}%
-            </Text>
-
-            <View style={styles.progressDetails}>
-              <Text style={styles.progressDetailText}>
-                Downloaded:{" "}
-                {DatabaseDownloadService.formatBytes(
-                  downloadProgress.totalBytesWritten
-                )}
-                {downloadProgress.totalBytesExpected
-                  ? ` / ${DatabaseDownloadService.formatBytes(
-                      downloadProgress.totalBytesExpected
-                    )}`
-                  : ""}
-              </Text>
-
-              {downloadProgress.speedBps && (
-                <Text style={styles.progressDetailText}>
-                  Speed:{" "}
-                  {DatabaseDownloadService.formatBytes(
-                    downloadProgress.speedBps
-                  )}
-                  /s
-                </Text>
-              )}
-
-              {downloadProgress.estimatedTimeRemaining && (
-                <Text style={styles.progressDetailText}>
-                  Time remaining:{" "}
-                  {DatabaseDownloadService.formatTime(
-                    downloadProgress.estimatedTimeRemaining
-                  )}
-                </Text>
-              )}
-            </View>
-          </View>
-        )}
-
-        <View style={styles.buttonContainer}>
-          <Button
-            onPress={cancelDownload}
-            style={{ ...styles.button, ...styles.cancelButton }}
-          >
-            <Text style={styles.buttonText}>Cancel Download</Text>
-          </Button>
-        </View>
-      </View>
-    );
+    return <View style={{ flex: 1 }}>{children}</View>;
   }
 
   // Database is ready, show the main app

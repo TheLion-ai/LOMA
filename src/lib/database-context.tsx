@@ -57,6 +57,10 @@ export interface DatabaseContextActions {
   startDownload: () => Promise<void>;
   /** Cancel the current download */
   cancelDownload: () => Promise<void>;
+  /** Pause the current download */
+  pauseDownload: () => Promise<void>;
+  /** Resume a paused download */
+  resumeDownload: () => Promise<void>;
   /** Remove local database and start fresh download */
   resetAndDownload: () => Promise<void>;
   /** Check database status and refresh state */
@@ -200,6 +204,33 @@ export function DatabaseProvider({ children }: { children: React.ReactNode }) {
   }, [downloadService]);
 
   /**
+   * Pause the current download
+   */
+  const pauseDownload = useCallback(async () => {
+    try {
+      await downloadService.pauseDownload();
+      setDownloadState("paused");
+    } catch (err) {
+      console.error("Error pausing download:", err);
+      setError(err instanceof Error ? err.message : String(err));
+    }
+  }, [downloadService]);
+
+  /**
+   * Resume a paused download
+   */
+  const resumeDownload = useCallback(async () => {
+    try {
+      setError(null);
+      await downloadService.resumeDownload();
+    } catch (err) {
+      console.error("Error resuming download:", err);
+      setError(err instanceof Error ? err.message : String(err));
+      setDownloadState("error");
+    }
+  }, [downloadService]);
+
+  /**
    * Remove local database and start fresh download
    */
   const resetAndDownload = useCallback(async () => {
@@ -275,6 +306,8 @@ export function DatabaseProvider({ children }: { children: React.ReactNode }) {
     // Actions
     startDownload,
     cancelDownload,
+    pauseDownload,
+    resumeDownload,
     resetAndDownload,
     refreshStatus,
     clearError,

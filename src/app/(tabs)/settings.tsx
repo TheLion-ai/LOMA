@@ -4,7 +4,7 @@ import { useDatabase } from "@/lib/database-context";
 import { DatabaseDownloadService } from "@/lib/database-download-service";
 import { Button } from "@/components/ui/button";
 import { useTheme } from "@/lib/theme-context";
-import { getCurrentTheme } from "@/lib/theme";
+import { getCurrentTheme, theme } from "@/lib/theme";
 
 export default function SettingsScreen() {
   const {
@@ -15,6 +15,8 @@ export default function SettingsScreen() {
     isDatabaseAvailable,
     startDownload,
     cancelDownload,
+    pauseDownload,
+    resumeDownload,
     resetAndDownload,
     refreshStatus,
     clearError,
@@ -31,24 +33,20 @@ export default function SettingsScreen() {
       backgroundColor: colors.background,
     },
     content: {
-      padding: 20,
+      padding: theme.spacing.default * 5, // 20px
     },
     title: {
       fontSize: 28,
       fontWeight: "bold" as const,
       color: colors.foreground,
-      marginBottom: 24,
+      marginBottom: theme.spacing.default * 6, // 24px
     },
     section: {
       backgroundColor: colors.card,
-      borderRadius: 12,
-      padding: 20,
-      marginBottom: 20,
-      shadowColor: "#000",
-      shadowOffset: { width: 0, height: 2 },
-      shadowOpacity: 0.1,
-      shadowRadius: 4,
-      elevation: 3,
+      borderRadius: theme.borderRadius.lg,
+      padding: theme.spacing.default * 5, // 20px
+      marginBottom: theme.spacing.default * 5, // 20px
+      ...theme.shadows.md,
       borderWidth: 1,
       borderColor: colors.border,
     },
@@ -82,25 +80,48 @@ export default function SettingsScreen() {
     statusWarning: {
       color: colors.destructive,
     },
-    progressSection: {
-      marginTop: 16,
-      padding: 16,
+    // Inline progress bar (shows above Refresh Status button)
+    inlineProgressContainer: {
+      marginBottom: theme.spacing.default * 3, // 12px
+      marginTop: theme.spacing.default * 3, // 12px
+    },
+    inlineProgressBar: {
+      width: "100%" as const,
+      height: 4,
       backgroundColor: colors.muted,
-      borderRadius: 8,
+      borderRadius: theme.borderRadius.sm,
+      overflow: "hidden" as const,
+      marginBottom: theme.spacing.default * 2, // 8px
+    },
+    inlineProgressFill: {
+      height: "100%" as const,
+      backgroundColor: colors.primary,
+    },
+    inlineProgressText: {
+      fontSize: 12,
+      color: colors.mutedForeground,
+      textAlign: "center" as const,
+    },
+    // Legacy progress section (keeping for compatibility)
+    progressSection: {
+      marginTop: theme.spacing.default * 4, // 16px
+      padding: theme.spacing.default * 4, // 16px
+      backgroundColor: colors.muted,
+      borderRadius: theme.borderRadius.md,
     },
     progressTitle: {
       fontSize: 14,
       fontWeight: "600" as const,
       color: colors.foreground,
-      marginBottom: 8,
+      marginBottom: theme.spacing.default * 2, // 8px
     },
     progressBar: {
       width: "100%" as const,
       height: 6,
       backgroundColor: colors.secondary,
-      borderRadius: 3,
+      borderRadius: theme.borderRadius.sm,
       overflow: "hidden" as const,
-      marginBottom: 8,
+      marginBottom: theme.spacing.default * 2, // 8px
     },
     progressFill: {
       height: "100%" as const,
@@ -109,7 +130,7 @@ export default function SettingsScreen() {
     progressText: {
       fontSize: 12,
       color: colors.foreground,
-      marginBottom: 4,
+      marginBottom: theme.spacing.default, // 4px
     },
     progressDetail: {
       fontSize: 11,
@@ -193,6 +214,43 @@ export default function SettingsScreen() {
     } finally {
       setIsRefreshing(false);
     }
+  };
+
+  // Helper function to get dynamic button text based on download state
+  const getButtonText = () => {
+    switch (downloadState) {
+      case "downloading":
+        return "Pause Download";
+      case "paused":
+        return "Continue Download";
+      default:
+        return "Reset Database";
+    }
+  };
+
+  // Helper function to handle button action based on download state
+  const handleButtonAction = () => {
+    switch (downloadState) {
+      case "downloading":
+        pauseDownload();
+        break;
+      case "paused":
+        resumeDownload();
+        break;
+      default:
+        handleResetDatabase();
+        break;
+    }
+  };
+
+  // Helper function to format progress text
+  const formatProgressText = (downloaded: number, total?: number) => {
+    const downloadedStr = DatabaseDownloadService.formatBytes(downloaded);
+    if (total) {
+      const totalStr = DatabaseDownloadService.formatBytes(total);
+      return `${downloadedStr} / ${totalStr}`;
+    }
+    return downloadedStr;
   };
 
   const handleResetDatabase = () => {
@@ -288,98 +346,108 @@ export default function SettingsScreen() {
             </>
           )}
 
-          {/* Download Progress */}
-          {downloadState === "downloading" && downloadProgress && (
-            <View style={dynamicStyles.progressSection}>
-              <Text style={dynamicStyles.progressTitle}>Download Progress</Text>
-
-              <View style={dynamicStyles.progressBar}>
-                <View
-                  style={[
-                    dynamicStyles.progressFill,
-                    { width: `${downloadProgress.percentage}%` },
-                  ]}
-                />
-              </View>
-
-              <Text style={dynamicStyles.progressText}>
-                {downloadProgress.percentage.toFixed(1)}% -{" "}
-                {DatabaseDownloadService.formatBytes(
-                  downloadProgress.totalBytesWritten
-                )}
-                {downloadProgress.totalBytesExpected &&
-                  ` / ${DatabaseDownloadService.formatBytes(
-                    downloadProgress.totalBytesExpected
-                  )}`}
-              </Text>
-
-              {downloadProgress.speedBps && (
-                <Text style={dynamicStyles.progressDetail}>
-                  Speed:{" "}
-                  {DatabaseDownloadService.formatBytes(
-                    downloadProgress.speedBps
-                  )}
-                  /s
-                </Text>
-              )}
-
-              {downloadProgress.estimatedTimeRemaining && (
-                <Text style={dynamicStyles.progressDetail}>
-                  Time remaining:{" "}
-                  {DatabaseDownloadService.formatTime(
-                    downloadProgress.estimatedTimeRemaining
-                  )}
-                </Text>
-              )}
-            </View>
-          )}
-
           {/* Error Display */}
           {error && (
             <View style={dynamicStyles.errorContainer}>
               <Text style={dynamicStyles.errorText}>{error}</Text>
-              <Button onPress={clearError} style={dynamicStyles.clearErrorButton}>
+              <Button
+                onPress={clearError}
+                style={dynamicStyles.clearErrorButton}
+              >
                 <Text style={dynamicStyles.buttonText}>Clear Error</Text>
               </Button>
             </View>
           )}
+
+          {/* Inline Progress Bar (above Refresh Status button) */}
+          {(downloadState === "downloading" || downloadState === "paused") &&
+            downloadProgress && (
+              <View style={dynamicStyles.inlineProgressContainer}>
+                <View style={dynamicStyles.inlineProgressBar}>
+                  <View
+                    style={[
+                      dynamicStyles.inlineProgressFill,
+                      { width: `${downloadProgress.percentage}%` },
+                    ]}
+                  />
+                </View>
+                <Text style={dynamicStyles.inlineProgressText}>
+                  {formatProgressText(
+                    downloadProgress.totalBytesWritten,
+                    downloadProgress.totalBytesExpected
+                  )}
+                </Text>
+              </View>
+            )}
 
           {/* Action Buttons */}
           <View style={dynamicStyles.buttonGroup}>
             <Button
               onPress={handleRefreshStatus}
               disabled={isRefreshing}
-              style={{ ...dynamicStyles.button, ...dynamicStyles.secondaryButton }}
+              style={{
+                ...dynamicStyles.button,
+                ...dynamicStyles.secondaryButton,
+              }}
             >
               <Text style={dynamicStyles.secondaryButtonText}>
                 {isRefreshing ? "Refreshing..." : "Refresh Status"}
               </Text>
             </Button>
 
-            {downloadState === "downloading" ? (
+            {/* Dynamic Reset/Pause/Continue button */}
+            {(databaseStatus?.exists ||
+              downloadState === "downloading" ||
+              downloadState === "paused") && (
+              <Button
+                onPress={handleButtonAction}
+                style={{
+                  ...dynamicStyles.button,
+                  ...(downloadState === "downloading" ||
+                  downloadState === "paused"
+                    ? dynamicStyles.secondaryButton
+                    : dynamicStyles.dangerButton),
+                }}
+              >
+                <Text
+                  style={
+                    downloadState === "downloading" ||
+                    downloadState === "paused"
+                      ? dynamicStyles.secondaryButtonText
+                      : dynamicStyles.buttonText
+                  }
+                >
+                  {getButtonText()}
+                </Text>
+              </Button>
+            )}
+
+            {/* Download button (only when no database and not downloading/paused) */}
+            {!isDatabaseAvailable &&
+              downloadState !== "downloading" &&
+              downloadState !== "paused" && (
+                <Button
+                  onPress={handleStartDownload}
+                  style={dynamicStyles.button}
+                >
+                  <Text style={dynamicStyles.buttonText}>
+                    Download Database
+                  </Text>
+                </Button>
+              )}
+
+            {/* Cancel button (only when downloading or paused) */}
+            {(downloadState === "downloading" ||
+              downloadState === "paused") && (
               <Button
                 onPress={cancelDownload}
-                style={{ ...dynamicStyles.button, ...dynamicStyles.cancelButton }}
+                style={{
+                  ...dynamicStyles.button,
+                  ...dynamicStyles.cancelButton,
+                }}
               >
                 <Text style={dynamicStyles.buttonText}>Cancel Download</Text>
               </Button>
-            ) : (
-              <>
-                {!isDatabaseAvailable && (
-                  <Button onPress={handleStartDownload} style={dynamicStyles.button}>
-                    <Text style={dynamicStyles.buttonText}>Download Database</Text>
-                  </Button>
-                )}
-
-                {databaseStatus?.exists && (
-                  <Button
-                    onPress={handleResetDatabase}
-                    style={{ ...dynamicStyles.button, ...dynamicStyles.dangerButton }}
-                  >
-                    <Text style={dynamicStyles.buttonText}>Reset Database</Text>
-                  </Button>
-                )}
-              </>
             )}
           </View>
         </View>
@@ -400,5 +468,3 @@ export default function SettingsScreen() {
     </ScrollView>
   );
 }
-
-
