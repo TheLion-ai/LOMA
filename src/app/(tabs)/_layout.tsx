@@ -1,10 +1,36 @@
 import { Tabs } from "expo-router";
 import React from "react";
 import { FontAwesome } from "@expo/vector-icons";
+import { useTheme } from "@/lib/theme-context";
+import { getCurrentTheme } from "@/lib/theme";
 
 export default function TabLayout() {
+  const { isDark } = useTheme();
+  const colors = getCurrentTheme(isDark);
+
   return (
-    <Tabs>
+    <Tabs
+      screenOptions={{
+        tabBarStyle: {
+          backgroundColor: colors.card,
+          borderTopColor: colors.border,
+          borderTopWidth: 1,
+        },
+        tabBarActiveTintColor: colors.primary,
+        tabBarInactiveTintColor: colors.mutedForeground,
+        tabBarLabelStyle: {
+          fontSize: 12,
+          fontWeight: '500',
+        },
+        headerStyle: {
+          backgroundColor: colors.background,
+        },
+        headerTintColor: colors.foreground,
+        headerTitleStyle: {
+          fontWeight: '600',
+        },
+      }}
+    >
       <Tabs.Screen
         name="search"
         options={{

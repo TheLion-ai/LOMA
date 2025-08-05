@@ -3,7 +3,6 @@ import {
   View,
   ScrollView,
   Text,
-  StyleSheet,
   TouchableOpacity,
   TextInput,
   Platform,
@@ -18,6 +17,8 @@ import { createAIService, AIService } from "@/lib/ai-service";
 import { ChatMessage, Chat as ChatType } from "@/lib/chat-storage";
 import { getRAGService } from "@/lib/rag-service";
 import { RAGSearchStatus, Source } from "@/types/rag";
+import { useTheme } from "@/lib/theme-context";
+import { getCurrentTheme } from "@/lib/theme";
 
 interface ChatProps {
   activeChat: ChatType;
@@ -32,6 +33,8 @@ export default function Chat({
   onMessagesChange,
   onTitleChange,
 }: ChatProps) {
+  const { isDark } = useTheme();
+  const colors = getCurrentTheme(isDark);
   const [inputText, setInputText] = useState("");
   const [isModelReady, setIsModelReady] = useState(false);
   const [downloadProgress, setDownloadProgress] = useState(0);
@@ -48,6 +51,164 @@ export default function Chat({
     message: "",
     isLoading: false,
   });
+
+  // Create dynamic styles based on current theme
+  const dynamicStyles = {
+    container: {
+      flex: 1,
+      backgroundColor: colors.background,
+    },
+    centerContainer: {
+      flex: 1,
+      justifyContent: "center" as const,
+      alignItems: "center" as const,
+      padding: 16,
+      backgroundColor: colors.background,
+    },
+    icon: {
+      marginBottom: 16,
+    },
+    title: {
+      fontSize: 18,
+      fontWeight: "600" as const,
+      marginBottom: 8,
+      color: colors.foreground,
+    },
+    subtitle: {
+      fontSize: 14,
+      color: colors.mutedForeground,
+      marginBottom: 16,
+    },
+    progressBarContainer: {
+      width: "100%" as const,
+      maxWidth: 300,
+      height: 8,
+      backgroundColor: colors.secondary,
+      borderRadius: 4,
+      overflow: "hidden" as const,
+    },
+    progressBar: {
+      height: "100%" as const,
+      backgroundColor: colors.primary,
+    },
+    progressText: {
+      fontSize: 14,
+      color: colors.mutedForeground,
+      marginTop: 8,
+    },
+    messagesContainer: {
+      flex: 1,
+      padding: 16,
+    },
+    messageWrapper: {
+      marginBottom: 16,
+    },
+    messageRow: {
+      flexDirection: "row" as const,
+    },
+    userRow: {
+      justifyContent: "flex-end" as const,
+    },
+    assistantRow: {
+      justifyContent: "flex-start" as const,
+    },
+    messageContent: {
+      flexDirection: "row" as const,
+      maxWidth: "80%",
+    },
+    userContent: {
+      flexDirection: "row-reverse" as const,
+    },
+    assistantContent: {
+      flexDirection: "row" as const,
+    },
+    avatarContainer: {
+      marginHorizontal: 8,
+    },
+    avatar: {
+      width: 32,
+      height: 32,
+    },
+    messageBubble: {
+      padding: 12,
+      borderRadius: 12,
+    },
+    userBubble: {
+      backgroundColor: colors.primary,
+      borderBottomRightRadius: 4,
+    },
+    assistantBubble: {
+      backgroundColor: colors.muted,
+      borderBottomLeftRadius: 4,
+    },
+    streamingBubble: {
+      borderWidth: 1,
+      borderColor: colors.border,
+    },
+    cursor: {
+      color: colors.primary,
+      fontWeight: "bold" as const,
+    },
+    messageText: {
+      fontSize: 16,
+    },
+    userText: {
+      color: colors.primaryForeground,
+    },
+    assistantText: {
+      color: colors.foreground,
+    },
+    timestamp: {
+      fontSize: 12,
+      marginTop: 4,
+    },
+    userTimestamp: {
+      color: colors.primaryForeground + "80", // Adding transparency
+    },
+    assistantTimestamp: {
+      color: colors.mutedForeground,
+    },
+    inputContainer: {
+      padding: 16,
+      backgroundColor: colors.background,
+    },
+    inputRow: {
+      flexDirection: "row" as const,
+      alignItems: "flex-end" as const,
+    },
+    textInput: {
+      flex: 1,
+      borderWidth: 1,
+      borderColor: colors.border,
+      borderRadius: 8,
+      padding: 12,
+      marginRight: 8,
+      maxHeight: 100,
+      fontSize: 16,
+      backgroundColor: colors.input,
+      color: colors.foreground,
+    },
+    sendButton: {
+      backgroundColor: colors.primary,
+      borderRadius: 8,
+      padding: 12,
+      justifyContent: "center" as const,
+      alignItems: "center" as const,
+    },
+    sendButtonDisabled: {
+      backgroundColor: colors.muted,
+    },
+    ragStatusBubble: {
+      backgroundColor: colors.accent + "20", // Adding transparency
+      borderBottomLeftRadius: 4,
+      borderWidth: 1,
+      borderColor: colors.accent + "40",
+    },
+    ragStatusText: {
+      color: colors.accent,
+      fontStyle: "italic" as const,
+    },
+  };
 
   useEffect(() => {
     initializeAI();
@@ -372,36 +533,36 @@ export default function Chat({
 
   if (isDownloading) {
     return (
-      <View style={styles.centerContainer}>
+      <View style={dynamicStyles.centerContainer}>
         <Ionicons
           name="download-outline"
           size={64}
-          color="#3B82F6"
-          style={styles.icon}
+          color={colors.primary}
+          style={dynamicStyles.icon}
         />
-        <Text style={styles.title}>Downloading Gemma 3n Model</Text>
-        <Text style={styles.subtitle}>This may take a few minutes...</Text>
-        <View style={styles.progressBarContainer}>
+        <Text style={dynamicStyles.title}>Downloading Gemma 3n Model</Text>
+        <Text style={dynamicStyles.subtitle}>This may take a few minutes...</Text>
+        <View style={dynamicStyles.progressBarContainer}>
           <View
-            style={[styles.progressBar, { width: `${downloadProgress}%` }]}
+            style={[dynamicStyles.progressBar, { width: `${downloadProgress}%` }]}
           />
         </View>
-        <Text style={styles.progressText}>{downloadProgress}%</Text>
+        <Text style={dynamicStyles.progressText}>{downloadProgress}%</Text>
       </View>
     );
   }
 
   if (!isModelReady) {
     return (
-      <View style={styles.centerContainer}>
+      <View style={dynamicStyles.centerContainer}>
         <Ionicons
           name="chatbubble-ellipses-outline"
           size={64}
-          color="#3B82F6"
-          style={styles.icon}
+          color={colors.primary}
+          style={dynamicStyles.icon}
         />
-        <Text style={styles.title}>Initializing AI Model</Text>
-        <Text style={styles.subtitle}>
+        <Text style={dynamicStyles.title}>Initializing AI Model</Text>
+        <Text style={dynamicStyles.subtitle}>
           Please wait while we set up Gemma 3n...
         </Text>
       </View>
@@ -409,60 +570,60 @@ export default function Chat({
   }
 
   return (
-    <View style={styles.container}>
+    <View style={dynamicStyles.container}>
       <ScrollView
         ref={scrollViewRef}
-        style={styles.messagesContainer}
+        style={dynamicStyles.messagesContainer}
         onContentSizeChange={() =>
           scrollViewRef.current?.scrollToEnd({ animated: true })
         }
       >
         {messages.map((message, index) => (
-          <View key={index} style={styles.messageWrapper}>
+          <View key={index} style={dynamicStyles.messageWrapper}>
             <View
               style={[
-                styles.messageRow,
-                message.role === "user" ? styles.userRow : styles.assistantRow,
+                dynamicStyles.messageRow,
+                message.role === "user" ? dynamicStyles.userRow : dynamicStyles.assistantRow,
               ]}
             >
               <View
                 style={[
-                  styles.messageContent,
+                  dynamicStyles.messageContent,
                   message.role === "user"
-                    ? styles.userContent
-                    : styles.assistantContent,
+                    ? dynamicStyles.userContent
+                    : dynamicStyles.assistantContent,
                 ]}
               >
-                <View style={styles.avatarContainer}>
-                  <Avatar style={styles.avatar}>
+                <View style={dynamicStyles.avatarContainer}>
+                  <Avatar style={dynamicStyles.avatar}>
                     {message.role === "user" ? (
-                      <Ionicons name="person" size={20} color="#10B981" />
+                      <Ionicons name="person" size={20} color={colors.primary} />
                     ) : (
                       <Ionicons
                         name="chatbubble-ellipses"
                         size={20}
-                        color="#3B82F6"
+                        color={colors.primary}
                       />
                     )}
                   </Avatar>
                 </View>
                 <View
                   style={[
-                    styles.messageBubble,
+                    dynamicStyles.messageBubble,
                     message.role === "user"
-                      ? styles.userBubble
-                      : styles.assistantBubble,
+                      ? dynamicStyles.userBubble
+                      : dynamicStyles.assistantBubble,
                   ]}
                 >
                   {message.role === "assistant" ? (
                     <Markdown
                       style={{
                         body: {
-                          color: styles.assistantText.color,
-                          fontSize: styles.messageText.fontSize,
+                          color: colors.foreground,
+                          fontSize: 16,
                         },
                         link: {
-                          color: "#3B82F6",
+                          color: colors.primary,
                           textDecorationLine: "underline",
                         },
                         paragraph: {
@@ -480,7 +641,12 @@ export default function Chat({
                       {message.content}
                     </Markdown>
                   ) : (
-                    <Text style={[styles.messageText, styles.userText]}>
+                    <Text
+                      style={[
+                        dynamicStyles.messageText,
+                        dynamicStyles.userText,
+                      ]}
+                    >
                       {message.content}
                     </Text>
                   )}
@@ -497,18 +663,18 @@ export default function Chat({
         ))}
 
         {ragStatus.isLoading && (
-          <View style={styles.messageWrapper}>
-            <View style={[styles.messageRow, styles.assistantRow]}>
-              <View style={[styles.messageContent, styles.assistantContent]}>
-                <View style={styles.avatarContainer}>
-                  <Avatar style={styles.avatar}>
-                    <Ionicons name="search" size={20} color="#8B5CF6" />
+          <View style={dynamicStyles.messageWrapper}>
+            <View style={[dynamicStyles.messageRow, dynamicStyles.assistantRow]}>
+              <View style={[dynamicStyles.messageContent, dynamicStyles.assistantContent]}>
+                <View style={dynamicStyles.avatarContainer}>
+                  <Avatar style={dynamicStyles.avatar}>
+                    <Ionicons name="search" size={20} color={colors.accent} />
                   </Avatar>
                 </View>
-                <View style={[styles.messageBubble, styles.ragStatusBubble]}>
-                  <Text style={[styles.messageText, styles.ragStatusText]}>
+                <View style={[dynamicStyles.messageBubble, dynamicStyles.ragStatusBubble]}>
+                  <Text style={[dynamicStyles.messageText, dynamicStyles.ragStatusText]}>
                     {ragStatus.message}
-                    <Text style={styles.cursor}>▊</Text>
+                    <Text style={dynamicStyles.cursor}>▊</Text>
                   </Text>
                 </View>
               </View>
@@ -517,23 +683,23 @@ export default function Chat({
         )}
 
         {isStreaming && (
-          <View style={styles.messageWrapper}>
-            <View style={[styles.messageRow, styles.assistantRow]}>
-              <View style={[styles.messageContent, styles.assistantContent]}>
-                <View style={styles.avatarContainer}>
-                  <Avatar style={styles.avatar}>
+          <View style={dynamicStyles.messageWrapper}>
+            <View style={[dynamicStyles.messageRow, dynamicStyles.assistantRow]}>
+              <View style={[dynamicStyles.messageContent, dynamicStyles.assistantContent]}>
+                <View style={dynamicStyles.avatarContainer}>
+                  <Avatar style={dynamicStyles.avatar}>
                     <Ionicons
                       name="chatbubble-ellipses"
                       size={20}
-                      color="#3B82F6"
+                      color={colors.primary}
                     />
                   </Avatar>
                 </View>
                 <View
                   style={[
-                    styles.messageBubble,
-                    styles.assistantBubble,
-                    styles.streamingBubble,
+                    dynamicStyles.messageBubble,
+                    dynamicStyles.assistantBubble,
+                    dynamicStyles.streamingBubble,
                   ]}
                 >
                   {streamingMessage ? (
@@ -543,11 +709,11 @@ export default function Chat({
                       <Markdown
                         style={{
                           body: {
-                            color: styles.assistantText.color,
-                            fontSize: styles.messageText.fontSize,
+                            color: colors.foreground,
+                            fontSize: 16,
                           },
                           link: {
-                            color: "#3B82F6",
+                            color: colors.primary,
                             textDecorationLine: "underline",
                           },
                           paragraph: {
@@ -564,10 +730,10 @@ export default function Chat({
                       >
                         {streamingMessage}
                       </Markdown>
-                      <Text style={styles.cursor}>▊</Text>
+                      <Text style={dynamicStyles.cursor}>▊</Text>
                     </View>
                   ) : (
-                    <Text style={[styles.messageText, styles.assistantText]}>
+                    <Text style={[dynamicStyles.messageText, dynamicStyles.assistantText]}>
                       {".".repeat(dotCount)}
                     </Text>
                   )}
@@ -580,11 +746,12 @@ export default function Chat({
 
       <Separator />
 
-      <View style={styles.inputContainer}>
-        <View style={styles.inputRow}>
+      <View style={dynamicStyles.inputContainer}>
+        <View style={dynamicStyles.inputRow}>
           <TextInput
-            style={styles.textInput}
+            style={dynamicStyles.textInput}
             placeholder="Type your message..."
+            placeholderTextColor={colors.mutedForeground}
             value={inputText}
             onChangeText={setInputText}
             multiline
@@ -594,11 +761,11 @@ export default function Chat({
             onPress={sendMessage}
             disabled={!inputText.trim() || isStreaming}
             style={[
-              styles.sendButton,
-              (!inputText.trim() || isStreaming) && styles.sendButtonDisabled,
+              dynamicStyles.sendButton,
+              (!inputText.trim() || isStreaming) && dynamicStyles.sendButtonDisabled,
             ]}
           >
-            <Ionicons name="send" size={16} color="white" />
+            <Ionicons name="send" size={16} color={colors.primaryForeground} />
           </TouchableOpacity>
         </View>
       </View>
@@ -606,155 +773,4 @@ export default function Chat({
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: "white",
-  },
-  centerContainer: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-    padding: 16,
-  },
-  icon: {
-    marginBottom: 16,
-  },
-  title: {
-    fontSize: 18,
-    fontWeight: "600",
-    marginBottom: 8,
-  },
-  subtitle: {
-    fontSize: 14,
-    color: "#6B7280",
-    marginBottom: 16,
-  },
-  progressBarContainer: {
-    width: "100%",
-    maxWidth: 300,
-    height: 8,
-    backgroundColor: "#E5E7EB",
-    borderRadius: 4,
-    overflow: "hidden",
-  },
-  progressBar: {
-    height: "100%",
-    backgroundColor: "#3B82F6",
-  },
-  progressText: {
-    fontSize: 14,
-    color: "#6B7280",
-    marginTop: 8,
-  },
-  messagesContainer: {
-    flex: 1,
-    padding: 16,
-  },
-  messageWrapper: {
-    marginBottom: 16,
-  },
-  messageRow: {
-    flexDirection: "row",
-  },
-  userRow: {
-    justifyContent: "flex-end",
-  },
-  assistantRow: {
-    justifyContent: "flex-start",
-  },
-  messageContent: {
-    flexDirection: "row",
-    maxWidth: "80%",
-  },
-  userContent: {
-    flexDirection: "row-reverse",
-  },
-  assistantContent: {
-    flexDirection: "row",
-  },
-  avatarContainer: {
-    marginHorizontal: 8,
-  },
-  avatar: {
-    width: 32,
-    height: 32,
-  },
-  messageBubble: {
-    padding: 12,
-    borderRadius: 12,
-  },
-  userBubble: {
-    backgroundColor: "#3B82F6",
-    borderBottomRightRadius: 4,
-  },
-  assistantBubble: {
-    backgroundColor: "#F3F4F6",
-    borderBottomLeftRadius: 4,
-  },
-  streamingBubble: {
-    borderWidth: 1,
-    borderColor: "#E5E7EB",
-  },
-  cursor: {
-    color: "#3B82F6",
-    fontWeight: "bold",
-  },
-  messageText: {
-    fontSize: 16,
-  },
-  userText: {
-    color: "white",
-  },
-  assistantText: {
-    color: "#1F2937",
-  },
-  timestamp: {
-    fontSize: 12,
-    marginTop: 4,
-  },
-  userTimestamp: {
-    color: "#BFDBFE",
-  },
-  assistantTimestamp: {
-    color: "#6B7280",
-  },
-  inputContainer: {
-    padding: 16,
-    backgroundColor: "white",
-  },
-  inputRow: {
-    flexDirection: "row",
-    alignItems: "flex-end",
-  },
-  textInput: {
-    flex: 1,
-    borderWidth: 1,
-    borderColor: "#D1D5DB",
-    borderRadius: 8,
-    padding: 12,
-    marginRight: 8,
-    maxHeight: 100,
-    fontSize: 16,
-  },
-  sendButton: {
-    backgroundColor: "#3B82F6",
-    borderRadius: 8,
-    padding: 12,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  sendButtonDisabled: {
-    backgroundColor: "#9CA3AF",
-  },
-  ragStatusBubble: {
-    backgroundColor: "#F3E8FF",
-    borderBottomLeftRadius: 4,
-    borderWidth: 1,
-    borderColor: "#C4B5FD",
-  },
-  ragStatusText: {
-    color: "#7C3AED",
-    fontStyle: "italic",
-  },
-});
+

@@ -1,6 +1,8 @@
 import React from "react";
-import { View, Text, StyleSheet, ViewStyle } from "react-native";
+import { View, Text, ViewStyle } from "react-native";
 import HamburgerButton from "./hamburger-button";
+import { useTheme } from "@/lib/theme-context";
+import { getCurrentTheme } from "@/lib/theme";
 
 interface DrawerTabHeaderProps {
   title: string;
@@ -15,38 +17,44 @@ export default function DrawerTabHeader({
   title,
   onMenuPress,
   isDrawerOpen,
-  backgroundColor = "#3B82F6",
-  textColor = "white",
+  backgroundColor,
+  textColor,
   style,
 }: DrawerTabHeaderProps) {
+  const { isDark } = useTheme();
+  const colors = getCurrentTheme(isDark);
+
+  const dynamicStyles = {
+    header: {
+      padding: 10,
+      minHeight: 60,
+      backgroundColor: backgroundColor || colors.primary,
+    },
+    headerContent: {
+      flexDirection: "row" as const,
+      alignItems: "center" as const,
+    },
+    headerTitle: {
+      fontSize: 18,
+      fontWeight: "600" as const,
+      flex: 1,
+      textAlign: "center" as const,
+      marginRight: 44,
+      color: textColor || colors.primaryForeground,
+    },
+  };
+
   return (
-    <View style={[styles.header, { backgroundColor }, style]}>
-      <View style={styles.headerContent}>
+    <View style={[dynamicStyles.header, style]}>
+      <View style={dynamicStyles.headerContent}>
         <HamburgerButton
           onPress={onMenuPress}
           visible={!isDrawerOpen}
-          color={textColor}
+          color={textColor || colors.primaryForeground}
         />
-        <Text style={[styles.headerTitle, { color: textColor }]}>{title}</Text>
+        <Text style={dynamicStyles.headerTitle}>{title}</Text>
       </View>
     </View>
   );
 }
 
-const styles = StyleSheet.create({
-  header: {
-    padding: 10,
-    minHeight: 60,
-  },
-  headerContent: {
-    flexDirection: "row",
-    alignItems: "center",
-  },
-  headerTitle: {
-    fontSize: 18,
-    fontWeight: "600",
-    flex: 1,
-    textAlign: "center",
-    marginRight: 44,
-  },
-});

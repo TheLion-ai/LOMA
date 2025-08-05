@@ -1,9 +1,10 @@
 import "react-native-gesture-handler";
-import "@/global.css";
+
 import { Slot } from "expo-router";
 import Head from "expo-router/head";
 import { DatabaseProvider } from "@/lib/database-context";
 import { DatabaseInitialization } from "@/components/database-initialization";
+import { ThemeProvider } from "@/lib/theme-context";
 
 export default function Layout() {
   return (
@@ -15,11 +16,13 @@ export default function Layout() {
           content="Medical knowledge database with AI-powered search and chat functionality"
         />
       </Head>
-      <DatabaseProvider>
-        <DatabaseInitialization>
-          <Slot />
-        </DatabaseInitialization>
-      </DatabaseProvider>
+      <ThemeProvider>
+        <DatabaseProvider>
+          <DatabaseInitialization>
+            <Slot />
+          </DatabaseInitialization>
+        </DatabaseProvider>
+      </ThemeProvider>
     </>
   );
 }
