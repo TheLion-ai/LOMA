@@ -1,19 +1,11 @@
 import React, { useEffect, useState } from "react";
-import {
-  View,
-  Text,
-  TouchableOpacity,
-  ScrollView,
-  Alert,
-} from "react-native";
+import { View, Text, TouchableOpacity, ScrollView, Alert } from "react-native";
 import { Input } from "@/components/ui/input";
 import {
   useQueuedEmbeddingService,
   useEmbeddingModel,
 } from "../lib/embedding-service";
-import {
-  getTursoDBService,
-} from "../lib/turso-db-service";
+import { getTursoDBService } from "../lib/turso-db-service";
 import {
   performMedicalSearch,
   formatSearchResultsForDisplay,
@@ -142,14 +134,24 @@ export default function EmbeddingDemo() {
       fontWeight: "bold" as const,
       color: colors.foreground,
     },
-    resultMetaRow: {
+    resultInfoContainer: {
+      marginTop: 8,
+      gap: 4,
+    },
+    resultInfoRow: {
       flexDirection: "row" as const,
       alignItems: "center" as const,
     },
-    resultType: {
+    resultLabel: {
       fontSize: 12,
       color: colors.mutedForeground,
-      marginRight: 8,
+      minWidth: 80,
+    },
+    resultValue: {
+      fontSize: 12,
+      color: colors.foreground,
+      fontWeight: "bold" as const,
+      flex: 1,
     },
     resultSimilarity: {
       fontSize: 12,
@@ -287,26 +289,18 @@ export default function EmbeddingDemo() {
 
   return (
     <ScrollView style={dynamicStyles.container}>
-      <Text style={dynamicStyles.title}>
-        ExecuTorch Embedding Demo
-      </Text>
+      <Text style={dynamicStyles.title}>ExecuTorch Embedding Demo</Text>
 
       <View style={dynamicStyles.sectionContainer}>
-        <Text style={dynamicStyles.sectionTitle}>
-          Status
-        </Text>
+        <Text style={dynamicStyles.sectionTitle}>Status</Text>
         <Text style={dynamicStyles.statusText}>
           Embedding Model: {modelStatus}
         </Text>
-        <Text style={dynamicStyles.statusText}>
-          Database: {dbStatus}
-        </Text>
+        <Text style={dynamicStyles.statusText}>Database: {dbStatus}</Text>
       </View>
 
       <View style={dynamicStyles.sectionContainer}>
-        <Text style={dynamicStyles.sectionTitle}>
-          Medical Search
-        </Text>
+        <Text style={dynamicStyles.sectionTitle}>Medical Search</Text>
         <Input
           style={dynamicStyles.inputContainer}
           placeholder="Enter your medical question or topic..."
@@ -319,7 +313,8 @@ export default function EmbeddingDemo() {
           <TouchableOpacity
             style={[
               dynamicStyles.primaryButton,
-              (!embeddingModel.isReady || isLoading) && dynamicStyles.primaryButtonDisabled,
+              (!embeddingModel.isReady || isLoading) &&
+                dynamicStyles.primaryButtonDisabled,
             ]}
             onPress={performSearch}
             disabled={!embeddingModel.isReady || isLoading}
@@ -343,14 +338,12 @@ export default function EmbeddingDemo() {
               {
                 flex: 1,
                 alignItems: "center",
-              }
+              },
             ]}
             onPress={debugDocuments}
             disabled={isLoading}
           >
-            <Text style={dynamicStyles.warningButtonText}>
-              Debug Documents
-            </Text>
+            <Text style={dynamicStyles.warningButtonText}>Debug Documents</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -361,18 +354,33 @@ export default function EmbeddingDemo() {
             Search Results ({searchResults.length})
           </Text>
           {searchResults.map((result, index) => (
-            <View
-              key={index}
-              style={dynamicStyles.resultItem}
-            >
+            <View key={index} style={dynamicStyles.resultItem}>
               <View style={dynamicStyles.resultHeader}>
                 <Text style={dynamicStyles.resultTitle}>
                   {result.title || "Untitled"}
                 </Text>
-                <View style={dynamicStyles.resultMetaRow}>
-                  <Text style={dynamicStyles.resultType}>
+              </View>
+              <View style={dynamicStyles.resultInfoContainer}>
+                <View style={dynamicStyles.resultInfoRow}>
+                  <Text style={dynamicStyles.resultLabel}>Specialty: </Text>
+                  <Text style={dynamicStyles.resultValue}>
+                    {result.specialty || "N/A"}
+                  </Text>
+                </View>
+                <View style={dynamicStyles.resultInfoRow}>
+                  <Text style={dynamicStyles.resultLabel}>Year: </Text>
+                  <Text style={dynamicStyles.resultValue}>
+                    {result.year || "N/A"}
+                  </Text>
+                </View>
+                <View style={dynamicStyles.resultInfoRow}>
+                  <Text style={dynamicStyles.resultLabel}>Result Type: </Text>
+                  <Text style={dynamicStyles.resultValue}>
                     {result.type || "Unknown"}
                   </Text>
+                </View>
+                <View style={dynamicStyles.resultInfoRow}>
+                  <Text style={dynamicStyles.resultLabel}>Similarity: </Text>
                   <Text style={dynamicStyles.resultSimilarity}>
                     {result.similarity
                       ? Math.round(result.similarity * 100)
@@ -381,28 +389,13 @@ export default function EmbeddingDemo() {
                   </Text>
                 </View>
               </View>
-              <Text style={dynamicStyles.resultContent}>
-                {result.content && result.content.length > 200
-                  ? `${result.content.substring(0, 200)}...`
-                  : result.content || "No content available"}
-              </Text>
-              <View style={dynamicStyles.resultFooter}>
-                <Text style={dynamicStyles.resultFooterText}>
-                  Specialty: {result.specialty || "N/A"}
-                </Text>
-                <Text style={dynamicStyles.resultFooterText}>
-                  Year: {result.year || "N/A"}
-                </Text>
-              </View>
             </View>
           ))}
         </View>
       )}
 
       <View style={[dynamicStyles.sectionContainer, { marginTop: 16 }]}>
-        <Text style={dynamicStyles.sectionTitle}>
-          How it works
-        </Text>
+        <Text style={dynamicStyles.sectionTitle}>How it works</Text>
         <Text style={dynamicStyles.instructionsText}>
           This demo uses ExecuTorch's ALL-MiniLM-L6-v2 model to generate real
           text embeddings for semantic search. The embeddings are used to find
