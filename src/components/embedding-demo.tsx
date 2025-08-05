@@ -360,11 +360,6 @@ export default function EmbeddingDemo() {
                   {result.title || "Untitled"}
                 </Text>
               </View>
-              <Text style={dynamicStyles.resultContent}>
-                {result.content && result.content.length > 200
-                  ? `${result.content.substring(0, 200)}...`
-                  : result.content || "No content available"}
-              </Text>
               <View style={dynamicStyles.resultInfoContainer}>
                 <View style={dynamicStyles.resultInfoRow}>
                   <Text style={dynamicStyles.resultLabel}>Specialty: </Text>
