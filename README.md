@@ -55,6 +55,10 @@ LOMA is designed exclusively for iOS and Android devices with on-device AI infer
    - Ask medical questions and receive AI responses with cited sources
    - Browse medical database with semantic search
    - All processing happens locally on your device
+  
+## Database
+To use the full database chage `DATABASE_DB_URL` in `src/lib/database-download-service.ts` to:
+`/miriad_medical_minlm_5M.db`
 
 ## Technology Stack
 
@@ -118,7 +122,7 @@ LOMA uses specialized models optimized for medical assistance on mobile devices:
 - **iOS**: iOS 13.0+ with at least 6GB storage space
 - **Android**: Android 8.0+ (API level 26) with at least 6GB storage space
 - **RAM**: Minimum 6GB recommended for optimal performance
-- **Storage**: 20GB free space for models and medical database
+- **Storage**: 30GB free space for models and fullmedical database
 
 ## How LOMA's RAG System Works
 
