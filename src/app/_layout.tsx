@@ -5,6 +5,7 @@ import Head from "expo-router/head";
 import { DatabaseProvider } from "@/lib/database-context";
 import { DatabaseInitialization } from "@/components/database-initialization";
 import { ThemeProvider } from "@/lib/theme-context";
+import { SettingsProvider } from "@/lib/settings-context";
 
 export default function Layout() {
   return (
@@ -17,11 +18,13 @@ export default function Layout() {
         />
       </Head>
       <ThemeProvider>
-        <DatabaseProvider>
-          <DatabaseInitialization>
-            <Slot />
-          </DatabaseInitialization>
-        </DatabaseProvider>
+        <SettingsProvider>
+          <DatabaseProvider>
+            <DatabaseInitialization>
+              <Slot />
+            </DatabaseInitialization>
+          </DatabaseProvider>
+        </SettingsProvider>
       </ThemeProvider>
     </>
   );

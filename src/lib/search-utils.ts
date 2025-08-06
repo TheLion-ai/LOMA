@@ -53,61 +53,39 @@ export async function performMedicalSearch(
   console.log(`📊 Search options:`, searchOptions);
 
   try {
-    // Search medical documents
-    console.log("📄 Searching medical documents...");
-    const documentResults = await tursoService.searchMedicalDocuments({
+    // Use the unified vector search function
+    console.log("🔍 Performing unified vector search...");
+    const { qaResults, documents: documentResults } = await tursoService.unifiedVectorSearch(
       query,
-      limit: searchOptions.limit,
-      threshold: searchOptions.threshold,
-      specialty: searchOptions.specialty,
-      year: searchOptions.year,
-    });
-
-    console.log(`✅ Found ${documentResults.length} document matches`);
-
-    // Search Q&A pairs
-    console.log("❓ Searching Q&A pairs...");
-    const qaResults = await tursoService.searchMedicalQA({
-      query,
-      limit: searchOptions.limit,
-      threshold: searchOptions.threshold,
-    });
+      searchOptions.limit,
+      searchOptions.threshold
+    );
 
     console.log(`✅ Found ${qaResults.length} Q&A matches`);
+    console.log(`✅ Found ${documentResults.length} document matches`);
 
-    // Get additional Q&A pairs from found documents if requested
-    let additionalQA: MedicalQA[] = [];
-    if (searchOptions.includeQA && documentResults.length > 0) {
-      console.log("🔗 Fetching related Q&A from found documents...");
-
-      for (const docResult of documentResults) {
-        try {
-          const relatedQA = await tursoService.getQAByDocument(
-            docResult.document.id
-          );
-          additionalQA.push(...relatedQA);
-        } catch (error) {
-          console.warn(
-            `Failed to get Q&A for document ${docResult.document.id}:`,
-            error
-          );
+    // Apply additional filters to documents if specified
+    let filteredDocuments = documentResults;
+    if (searchOptions.specialty || searchOptions.year) {
+      filteredDocuments = documentResults.filter(result => {
+        const doc = result.document;
+        if (searchOptions.specialty && doc.specialty !== searchOptions.specialty) {
+          return false;
         }
-      }
-
-      console.log(
-        `✅ Found ${additionalQA.length} additional Q&A pairs from documents`
-      );
+        if (searchOptions.year && doc.year !== searchOptions.year) {
+          return false;
+        }
+        return true;
+      });
+      console.log(`📋 Applied filters: ${filteredDocuments.length} documents after filtering`);
     }
 
-    // Combine and deduplicate Q&A results
-    const allQA = combineAndDeduplicateQA(
-      qaResults.map((r) => r.qa),
-      additionalQA
-    );
+    // Use only the QA results from vector search (no additional QA retrieval)
+    const allQA = qaResults.map((r) => r.qa);
 
     // Calculate statistics
     const allSimilarities = [
-      ...documentResults.map((r) => r.similarity),
+      ...filteredDocuments.map((r) => r.similarity),
       ...qaResults.map((r) => r.similarity),
     ];
 
@@ -118,9 +96,9 @@ export async function performMedicalSearch(
         : 0;
 
     const result: CombinedSearchResult = {
-      documents: documentResults,
+      documents: filteredDocuments,
       qaData: allQA,
-      totalResults: documentResults.length + allQA.length,
+      totalResults: filteredDocuments.length + allQA.length,
       averageSimilarity,
     };
 
@@ -197,7 +175,7 @@ export function formatSearchResultsForDisplay(
       type: "Q&A",
       title: qa.question,
       content: qa.answer,
-      similarity: 0, // Q&A from documents don't have direct similarity scores
+      similarity: 0, // Q&A from vector search have similarity but not displayed here
       specialty: "N/A",
       year: "N/A",
       id: qa.id,
@@ -213,32 +191,7 @@ export function formatSearchResultsForDisplay(
   });
 }
 
-/**
- * Combines and deduplicates Q&A arrays based on ID
- * @param searchQA Q&A from direct search
- * @param documentQA Q&A from related documents
- * @returns Deduplicated Q&A array
- */
-function combineAndDeduplicateQA(
-  searchQA: MedicalQA[],
-  documentQA: MedicalQA[]
-): MedicalQA[] {
-  const qaMap = new Map<string, MedicalQA>();
 
-  // Add search results first (higher priority)
-  for (const qa of searchQA) {
-    qaMap.set(qa.id, qa);
-  }
-
-  // Add document Q&A if not already present
-  for (const qa of documentQA) {
-    if (!qaMap.has(qa.id)) {
-      qaMap.set(qa.id, qa);
-    }
-  }
-
-  return Array.from(qaMap.values());
-}
 
 /**
  * Validates search options and applies defaults

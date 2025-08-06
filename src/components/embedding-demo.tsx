@@ -12,19 +12,26 @@ import {
 } from "../lib/search-utils";
 import { FormattedResult } from "../types/rag";
 import { useTheme } from "@/lib/theme-context";
-import { getCurrentTheme } from "@/lib/theme";
+import { useSettings } from "@/lib/settings-context";
+import { getCurrentTheme, theme } from "@/lib/theme";
+
+interface ExpandedState {
+  [key: string]: boolean;
+}
 
 /**
  * Demo component showing ExecuTorch embedding integration with TursoDBService
  */
 export default function EmbeddingDemo() {
   const { isDark } = useTheme();
+  const { maxEmbeddingResults } = useSettings();
   const colors = getCurrentTheme(isDark);
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState<FormattedResult[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [modelStatus, setModelStatus] = useState<string>("Initializing...");
   const [dbStatus, setDbStatus] = useState<string>("Initializing...");
+  const [expanded, setExpanded] = useState<ExpandedState>({});
 
   // Initialize the embedding service and model
   const embeddingService = useQueuedEmbeddingService();
@@ -182,6 +189,64 @@ export default function EmbeddingDemo() {
       lineHeight: 20,
       marginTop: 8,
     },
+    documentContainer: {
+      marginBottom: 12,
+      backgroundColor: colors.background,
+      borderRadius: theme.borderRadius.md,
+      borderWidth: 1,
+      borderColor: colors.border,
+      overflow: "hidden",
+    },
+    documentHeader: {
+      flexDirection: "row" as const,
+      justifyContent: "space-between" as const,
+      alignItems: "center" as const,
+      padding: 12,
+      backgroundColor: colors.background,
+    },
+    documentTitle: {
+      flex: 1,
+      fontSize: 14,
+      fontWeight: "600" as const,
+      color: colors.foreground,
+      marginRight: 8,
+    },
+    expandIcon: {
+      fontSize: 16,
+      fontWeight: "bold" as const,
+      color: colors.mutedForeground,
+      width: 20,
+      textAlign: "center" as const,
+    },
+    documentContent: {
+      padding: 12,
+      paddingTop: 0,
+      backgroundColor: colors.muted,
+    },
+    contentScrollView: {
+      maxHeight: 200,
+      marginBottom: 8,
+    },
+    contentText: {
+      fontSize: 12,
+      color: colors.foreground,
+      lineHeight: 18,
+    },
+    metadata: {
+      borderTopWidth: 1,
+      borderTopColor: colors.border,
+      paddingTop: 8,
+    },
+    metadataText: {
+      fontSize: 11,
+      color: colors.mutedForeground,
+      marginBottom: 2,
+    },
+    linkText: {
+      fontSize: 11,
+      color: colors.primary,
+      marginTop: 4,
+    },
   };
 
   useEffect(() => {
@@ -242,22 +307,27 @@ export default function EmbeddingDemo() {
     setIsLoading(true);
     try {
       console.log(
-        "🔍 Performing comprehensive medical search using shared utilities..."
+        "🔍 Performing document search using shared utilities..."
       );
 
       const searchResults = await performMedicalSearch(searchQuery, {
-        limit: 5,
+        limit: maxEmbeddingResults,
         threshold: 0.1,
-        includeQA: true,
+        includeQA: false,
       });
 
-      // Format results for display
-      const formattedResults = formatSearchResultsForDisplay(searchResults);
+      // Format only document results for display
+      const documentsOnlyResult = {
+        ...searchResults,
+        qaData: [], // Remove Q&A data
+        totalResults: searchResults.documents.length
+      };
+      const formattedResults = formatSearchResultsForDisplay(documentsOnlyResult);
 
       setSearchResults(formattedResults);
-      console.log(`✅ Found ${formattedResults.length} total results`);
+      console.log(`✅ Found ${formattedResults.length} document results`);
       console.log(
-        `📊 Search stats: ${searchResults.documents.length} documents, ${searchResults.qaData.length} Q&A pairs`
+        `📊 Search stats: ${searchResults.documents.length} documents`
       );
     } catch (error) {
       console.error("❌ Search failed:", error);
@@ -273,6 +343,14 @@ export default function EmbeddingDemo() {
   const clearResults = () => {
     setSearchResults([]);
     setSearchQuery("");
+    setExpanded({});
+  };
+
+  const toggleExpanded = (resultId: string) => {
+    setExpanded((prev) => ({
+      ...prev,
+      [resultId]: !prev[resultId],
+    }));
   };
 
   const debugDocuments = async () => {
@@ -300,7 +378,7 @@ export default function EmbeddingDemo() {
       </View>
 
       <View style={dynamicStyles.sectionContainer}>
-        <Text style={dynamicStyles.sectionTitle}>Medical Search</Text>
+        <Text style={dynamicStyles.sectionTitle}>Medical Document Search</Text>
         <Input
           style={dynamicStyles.inputContainer}
           placeholder="Enter your medical question or topic..."
@@ -353,44 +431,67 @@ export default function EmbeddingDemo() {
           <Text style={dynamicStyles.sectionTitle}>
             Search Results ({searchResults.length})
           </Text>
-          {searchResults.map((result, index) => (
-            <View key={index} style={dynamicStyles.resultItem}>
-              <View style={dynamicStyles.resultHeader}>
-                <Text style={dynamicStyles.resultTitle}>
-                  {result.title || "Untitled"}
-                </Text>
+          {searchResults.map((result, index) => {
+            const resultId = result.id || `result-${index}`;
+            return (
+              <View key={resultId} style={dynamicStyles.documentContainer}>
+                <TouchableOpacity
+                  style={dynamicStyles.documentHeader}
+                  onPress={() => toggleExpanded(resultId)}
+                >
+                  <Text style={dynamicStyles.documentTitle}>
+                    {index + 1}. {result.title || "Untitled"}
+                  </Text>
+                  <Text style={dynamicStyles.expandIcon}>
+                    {expanded[resultId] ? "−" : "+"}
+                  </Text>
+                </TouchableOpacity>
+
+                {expanded[resultId] && (
+                  <View style={dynamicStyles.documentContent}>
+                    <ScrollView
+                      style={dynamicStyles.contentScrollView}
+                      nestedScrollEnabled={true}
+                    >
+                      <Text style={dynamicStyles.contentText}>
+                        {result.content || "No content available"}
+                      </Text>
+                    </ScrollView>
+
+                    <View style={dynamicStyles.metadata}>
+                      <Text style={dynamicStyles.metadataText}>
+                        Type: {result.type || "Document"}
+                      </Text>
+
+                      {result.similarity && result.similarity > 0 && (
+                        <Text style={dynamicStyles.metadataText}>
+                          Similarity: {(result.similarity * 100).toFixed(1)}%
+                        </Text>
+                      )}
+
+                      {result.year && (
+                        <Text style={dynamicStyles.metadataText}>
+                          Year: {result.year}
+                        </Text>
+                      )}
+
+                      {result.specialty && (
+                        <Text style={dynamicStyles.metadataText}>
+                          Specialty: {result.specialty}
+                        </Text>
+                      )}
+
+                      {result.url && (
+                        <Text style={dynamicStyles.linkText}>
+                          Link: {result.url}
+                        </Text>
+                      )}
+                    </View>
+                  </View>
+                )}
               </View>
-              <View style={dynamicStyles.resultInfoContainer}>
-                <View style={dynamicStyles.resultInfoRow}>
-                  <Text style={dynamicStyles.resultLabel}>Specialty: </Text>
-                  <Text style={dynamicStyles.resultValue}>
-                    {result.specialty || "N/A"}
-                  </Text>
-                </View>
-                <View style={dynamicStyles.resultInfoRow}>
-                  <Text style={dynamicStyles.resultLabel}>Year: </Text>
-                  <Text style={dynamicStyles.resultValue}>
-                    {result.year || "N/A"}
-                  </Text>
-                </View>
-                <View style={dynamicStyles.resultInfoRow}>
-                  <Text style={dynamicStyles.resultLabel}>Result Type: </Text>
-                  <Text style={dynamicStyles.resultValue}>
-                    {result.type || "Unknown"}
-                  </Text>
-                </View>
-                <View style={dynamicStyles.resultInfoRow}>
-                  <Text style={dynamicStyles.resultLabel}>Similarity: </Text>
-                  <Text style={dynamicStyles.resultSimilarity}>
-                    {result.similarity
-                      ? Math.round(result.similarity * 100)
-                      : 0}
-                    %
-                  </Text>
-                </View>
-              </View>
-            </View>
-          ))}
+            );
+          })}
         </View>
       )}
 
@@ -399,12 +500,12 @@ export default function EmbeddingDemo() {
         <Text style={dynamicStyles.instructionsText}>
           This demo uses ExecuTorch's ALL-MiniLM-L6-v2 model to generate real
           text embeddings for semantic search. The embeddings are used to find
-          similar medical documents and Q&A pairs in the Turso vector database.
+          similar medical documents in the Turso vector database.
         </Text>
         <Text style={dynamicStyles.instructionsTextSpaced}>
           Try searching for medical topics like "heart disease", "diabetes
           treatment", or "cancer immunotherapy" to see how the semantic search
-          works with real embeddings.
+          works with real embeddings to find relevant documents.
         </Text>
       </View>
     </ScrollView>

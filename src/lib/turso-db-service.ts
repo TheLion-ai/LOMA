@@ -434,7 +434,7 @@ export class TursoDBService {
 
   /**
    * Searches for medical documents similar to the provided query
-   * Uses vector similarity search to find semantically related documents
+   * Uses the unified vector search function to find documents via Q&A pairs
    *
    * @param options - Search options including query text, result limit, similarity threshold, and filters
    * @returns Array of search results with medical documents and similarity scores
@@ -443,328 +443,29 @@ export class TursoDBService {
   async searchMedicalDocuments(
     options: MedicalSearchOptions
   ): Promise<DocumentSearchResult[]> {
-    if (!this.isInitialized || !this.db) {
-      throw new Error("Database not initialized");
-    }
-
-    if (!options.query) {
-      throw new Error("Search query is required");
-    }
-
+    const limit = options.limit || DEFAULT_SEARCH_LIMIT;
+    const threshold = options.threshold || DEFAULT_SIMILARITY_THRESHOLD;
+    
     try {
-      const limit = options.limit || DEFAULT_SEARCH_LIMIT;
-      const threshold = options.threshold || DEFAULT_SIMILARITY_THRESHOLD;
-
-      console.log(
-        `Generating embedding for medical document query: "${options.query}"`
-      );
-      const queryEmbedding = await this.generateEmbedding(options.query);
-      const queryVectorStr = this.toVector(queryEmbedding);
-
-      // Debug: Check if the query embedding is normalized
-      const queryMagnitude = Math.sqrt(
-        queryEmbedding.reduce((sum, val) => sum + val * val, 0)
-      );
-      console.log(`Query embedding magnitude: ${queryMagnitude}`);
-      console.log(`Query embedding dimensions: ${queryEmbedding.length}`);
-      console.log(`Query embedding sample values: [${queryEmbedding.slice(0, 5).map(v => v.toFixed(4)).join(', ')}...]`);
-
-      // Build WHERE clause for additional filters
-      let whereClause = "";
-      const params = [queryVectorStr, queryVectorStr];
-
-      if (options.specialty) {
-        whereClause += " AND d.specialty = ?";
-        params.push(options.specialty);
-      }
-
-      if (options.year) {
-        whereClause += " AND d.year = ?";
-        params.push(options.year.toString());
-      }
-
-      // First, let's check if we have any documents at all
-      const countResult = await this.db.execute(
-        "SELECT COUNT(*) as count FROM documents"
-      );
-      const docCount = countResult.rows?.[0]?.count || 0;
-      console.log(`Total documents in database: ${docCount}`);
+      const { documents } = await this.unifiedVectorSearch(options.query, limit, threshold);
       
-      // Debug: Check if vector index exists and is working
-      if (docCount > 0) {
-        console.log(`\n=== DATABASE STATE DEBUG ===`);
-        
-        // Check a few sample documents
-        const sampleDocs = await this.db.execute(
-          "SELECT id, title, vector_extract(vector) as vector_json FROM documents LIMIT 3"
-        );
-        
-        if (sampleDocs.rows) {
-          console.log(`Sample documents in database:`);
-          for (const doc of sampleDocs.rows) {
-            const vectorData = doc.vector_json ? JSON.parse(doc.vector_json) : null;
-            console.log(`- ID: ${doc.id}, Title: "${doc.title}", Vector dims: ${vectorData ? vectorData.length : 'null'}`);
+      // Apply additional filters if specified
+      let filteredDocuments = documents;
+      if (options.specialty || options.year) {
+        filteredDocuments = documents.filter(result => {
+          const doc = result.document;
+          if (options.specialty && doc.specialty !== options.specialty) {
+            return false;
           }
-        }
-        
-        // Test if vector index is accessible
-        try {
-          const indexTest = await this.db.execute(
-            `SELECT COUNT(*) as count FROM vector_top_k('documents_vector_idx', vector32(?), 1)`,
-            [queryVectorStr]
-          );
-          console.log(`Vector index test result: ${indexTest.rows?.[0]?.count || 0} results`);
-        } catch (indexError) {
-          console.error(`Vector index error:`, indexError);
-        }
-        
-        // Test alternative vector search approaches
-        console.log(`\n--- Testing Alternative Vector Search Methods ---`);
-        
-        // Test 1: Direct vector distance calculation without index
-        try {
-          const directTest = await this.db.execute(
-            `SELECT COUNT(*) as count FROM documents WHERE vector_distance_cos(vector, vector32(?)) < 2.0 LIMIT 5`,
-            [queryVectorStr]
-          );
-          console.log(`Direct vector distance test: ${directTest.rows?.[0]?.count || 0} results`);
-        } catch (directError) {
-          console.error(`Direct vector distance error:`, directError);
-        }
-        
-        // Test 2: Check if vector index exists
-        try {
-          const indexExists = await this.db.execute(
-            `SELECT name FROM sqlite_master WHERE type='table' AND name LIKE '%vector%'`
-          );
-          console.log(`Vector-related tables:`, indexExists.rows?.map(r => r.name) || []);
-        } catch (tableError) {
-          console.error(`Table check error:`, tableError);
-        }
-        
-        // Test 3: Try vector_top_k with different parameters
-        try {
-          const altIndexTest = await this.db.execute(
-            `SELECT id, vector_distance_cos(vector, vector32(?)) as distance FROM documents ORDER BY distance LIMIT 3`,
-            [queryVectorStr]
-          );
-          console.log(`Alternative search test: ${altIndexTest.rows?.length || 0} results`);
-          if (altIndexTest.rows && altIndexTest.rows.length > 0) {
-            const distances = altIndexTest.rows.map(r => r.distance);
-            const similarities = distances.map(d => 1 - d);
-            console.log(`Sample distances: ${distances.map(d => d?.toFixed(4)).join(', ')}`);
-            console.log(`Sample similarities: ${similarities.map(s => s?.toFixed(4)).join(', ')}`);
-            console.log(`💡 Suggested threshold: ${Math.max(0.05, Math.min(...similarities) - 0.05).toFixed(2)} (current: ${threshold})`);
-          
-          // Test if query embedding is in same space as document embeddings
-          console.log(`\n🧪 Testing embedding space compatibility:`);
-          const sampleDoc = await this.db.execute(`SELECT id, title, vector FROM documents LIMIT 1`);
-          if (sampleDoc.rows && sampleDoc.rows.length > 0) {
-            const docVector = sampleDoc.rows[0].vector;
-            console.log(`  Raw vector type: ${typeof docVector}`);
-            console.log(`  Raw vector: ${Array.isArray(docVector) ? 'Array' : 'Not Array'}`);
-            
-            if (docVector && Array.isArray(docVector)) {
-              const docMagnitude = Math.sqrt(docVector.reduce((sum, val) => sum + val * val, 0));
-              const dotProduct = queryEmbedding.reduce((sum, val, i) => sum + val * docVector[i], 0);
-              const cosineSim = dotProduct / (queryMagnitude * docMagnitude);
-              const distance = 1 - cosineSim;
-              
-              console.log(`  Sample doc: "${sampleDoc.rows[0].title}"`);
-              console.log(`  Doc vector magnitude: ${docMagnitude.toFixed(4)}`);
-              console.log(`  Cosine similarity: ${cosineSim.toFixed(4)}`);
-              console.log(`  Distance: ${distance.toFixed(4)}`);
-              
-              if (Math.abs(cosineSim) > 0.95) {
-                console.warn(`⚠️  Suspiciously high similarity - embeddings might be identical`);
-              } else if (Math.abs(cosineSim) < 0.05) {
-                console.warn(`⚠️  Very low similarity - embeddings might be from different models/spaces`);
-              }
-            } else {
-              console.warn(`⚠️  Document vector is not an array - this explains the search issues!`);
-              console.log(`  Vector value: ${JSON.stringify(docVector)?.substring(0, 100)}...`);
-            }
+          if (options.year && doc.year !== options.year) {
+            return false;
           }
-        }
-        } catch (altError) {
-          console.error(`Alternative search error:`, altError);
-        }
-        
-        // Test if database contains diabetes-related content
-        console.log(`\n🔍 Checking for diabetes-related content in database:`);
-        const diabetesCheck = await this.db.execute(`
-          SELECT id, title FROM documents 
-          WHERE LOWER(title) LIKE '%diabetes%' 
-             OR LOWER(title) LIKE '%diabetic%'
-             OR LOWER(title) LIKE '%insulin%'
-             OR LOWER(title) LIKE '%glucose%'
-             OR LOWER(title) LIKE '%blood sugar%'
-          LIMIT 5
-        `);
-        
-        if (diabetesCheck.rows && diabetesCheck.rows.length > 0) {
-          console.log(`Found ${diabetesCheck.rows.length} diabetes-related documents:`);
-          diabetesCheck.rows.forEach((row, i) => {
-            console.log(`  ${i+1}. "${row.title}" (ID: ${row.id})`);
-          });
-          
-          // Test similarity with the first diabetes document
-          console.log(`\n🎯 Testing direct similarity with diabetes document:`);
-          const diabetesDoc = await this.db.execute(`
-            SELECT id, title, vector FROM documents WHERE id = ?
-          `, [diabetesCheck.rows[0].id]);
-          
-          if (diabetesDoc.rows && diabetesDoc.rows.length > 0) {
-            const diabetesVector = diabetesDoc.rows[0].vector;
-            console.log(`  Diabetes doc vector type: ${typeof diabetesVector}`);
-            console.log(`  Diabetes doc vector is array: ${Array.isArray(diabetesVector)}`);
-            
-            if (Array.isArray(diabetesVector)) {
-              // Calculate similarity manually using the same method as the search
-              const distance = await this.db.execute(`
-                SELECT vector_distance_cos(?, ?) as distance
-              `, [queryEmbedding, diabetesVector]);
-              
-              if (distance.rows && distance.rows.length > 0) {
-                const dist = distance.rows[0].distance as number;
-                const similarity = 1 - dist;
-                console.log(`  Direct distance calculation: ${dist.toFixed(4)}`);
-                console.log(`  Direct similarity calculation: ${similarity.toFixed(4)}`);
-                console.log(`  Should this pass threshold (${threshold})? ${similarity > threshold ? 'YES' : 'NO'}`);
-              }
-            }
-          }
-        } else {
-          console.log(`❌ No diabetes-related documents found in titles`);
-          console.log(`   This might explain why similarity search returns unrelated results`);
-        }
-        
-        console.log(`=== END DATABASE STATE DEBUG ===`);
-      } else {
-        console.log(`⚠️  No documents found in database - this explains the 0 results!`);
+          return true;
+        });
       }
-
-      // Use the proper vector_top_k function for similarity search
-      let result;
-      try {
-        result = await this.db.execute(
-          `
-          SELECT
-            d.id,
-            d.title,
-            d.content,
-            d.created_at,
-            d.year,
-            d.specialty,
-            vector_extract(d.vector) as vector_json,
-            vector_distance_cos(d.vector, vector32(?)) as distance
-          FROM vector_top_k('documents_vector_idx', vector32(?), ${limit}) vtk
-          JOIN documents d ON d.rowid = vtk.id
-          WHERE 1=1${whereClause}
-          ORDER BY distance ASC
-        `,
-          params
-        );
-        
-        // Check if vector_top_k actually returned results
-         if (!result.rows || result.rows.length === 0) {
-           throw new Error("vector_top_k returned 0 results - likely index issue");
-         }
-         console.log(`✅ vector_top_k search successful, found ${result.rows?.length || 0} results`);
-       } catch (vectorIndexError) {
-         console.warn(`⚠️  vector_top_k failed or returned 0 results, falling back to direct vector search:`, vectorIndexError);
-        
-        // Fallback: Use direct vector distance calculation
-        result = await this.db.execute(
-          `
-          SELECT
-            d.id,
-            d.title,
-            d.content,
-            d.created_at,
-            d.year,
-            d.specialty,
-            vector_extract(d.vector) as vector_json,
-            vector_distance_cos(d.vector, vector32(?)) as distance
-          FROM documents d
-          WHERE 1=1${whereClause.replace(/^AND/, '')}
-          ORDER BY vector_distance_cos(d.vector, vector32(?)) ASC
-          LIMIT ${limit}
-        `,
-          [queryVectorStr, queryVectorStr, ...params.slice(2)]
-        );
-        
-        console.log(`📋 Fallback search found ${result.rows?.length || 0} results`);
-      }
-
-      const searchResults: DocumentSearchResult[] = [];
-
-      if (result.rows) {
-        console.log(`\n=== DOCUMENT SIMILARITY SEARCH DEBUG ===`);
-        console.log(`Query: "${options.query}"`);
-        console.log(`Found ${result.rows.length} raw results from database`);
-        console.log(`Similarity threshold: ${threshold}`);
-        console.log(`Query embedding magnitude: ${queryMagnitude.toFixed(4)}`);
-        console.log(`\n--- All Results (sorted by distance) ---`);
-        
-        // Sort results by distance for better debugging
-        const sortedRows = [...result.rows].sort((a, b) => (a.distance || 2) - (b.distance || 2));
-        
-        for (let i = 0; i < sortedRows.length; i++) {
-          const row = sortedRows[i];
-          const distance = row.distance || 2;
-          // For normalized embeddings with cosine distance:
-          // Distance 0 = identical vectors (similarity = 1.0)
-          // Distance 2 = opposite vectors (similarity = -1.0)
-          // Similarity = 1 - distance (can be negative for very dissimilar vectors)
-          const similarity = 1 - distance;
-          const passesThreshold = similarity >= threshold;
-          
-          console.log(
-            `${i + 1}. [${passesThreshold ? 'PASS' : 'FAIL'}] "${row.title}" | Distance: ${distance.toFixed(4)} | Similarity: ${similarity.toFixed(4)} | ID: ${row.id}`
-          );
-          
-          // Show content preview for top 3 results
-          if (i < 3 && row.content) {
-            const contentPreview = row.content.substring(0, 100).replace(/\n/g, ' ');
-            console.log(`   Content: "${contentPreview}${row.content.length > 100 ? '...' : ''}"`);
-          }
-
-          if (similarity >= threshold) {
-            try {
-              const document: MedicalDocument = {
-                id: row.id,
-                title: row.title,
-                content: row.content,
-                vector: row.vector_json ? JSON.parse(row.vector_json) : [],
-                created_at: row.created_at,
-                year: row.year,
-                specialty: row.specialty,
-              };
-
-              searchResults.push({
-                document,
-                similarity,
-              });
-            } catch (parseError) {
-              console.warn(
-                `Error parsing medical document result for ${row.id}:`,
-                parseError
-              );
-            }
-          }
-        }
-        
-        console.log(`\n--- Summary ---`);
-        console.log(`Results above threshold (${threshold}): ${searchResults.length}`);
-        console.log(`Results below threshold: ${result.rows.length - searchResults.length}`);
-        console.log(`=== END DOCUMENT SEARCH DEBUG ===\n`);
-      }
-
-      console.log(
-        `Found ${searchResults.length} similar medical documents for query: "${options.query}"`
-      );
-      return searchResults;
+      
+      console.log(`Found ${filteredDocuments.length} similar medical documents for query: "${options.query}"`);
+      return filteredDocuments;
     } catch (error) {
       console.error("Error searching medical documents:", error);
       throw new Error(
@@ -828,6 +529,159 @@ export class TursoDBService {
     }
   }
 
+  // ===== UNIFIED VECTOR SEARCH =====
+
+  /**
+   * Unified vector search function that searches QA pairs and retrieves related documents
+   * Implements the strategy: vector_top_k -> vector_distance_cos fallback -> get documents by document_id
+   *
+   * @param query - Search query text
+   * @param limit - Maximum number of results to return
+   * @param threshold - Minimum similarity threshold
+   * @returns Object containing QA results and related documents
+   */
+  async unifiedVectorSearch(query: string, limit: number = DEFAULT_SEARCH_LIMIT, threshold: number = DEFAULT_SIMILARITY_THRESHOLD): Promise<{
+    qaResults: QASearchResult[];
+    documents: DocumentSearchResult[];
+  }> {
+    if (!this.isInitialized || !this.db) {
+      throw new Error("Database not initialized");
+    }
+
+    if (!query) {
+      throw new Error("Search query is required");
+    }
+
+    try {
+      const totalSearchStartTime = Date.now();
+      console.log(`🔍 Unified vector search for: "${query}"`);      
+      const queryEmbedding = await this.generateEmbedding(query);
+      const queryVectorStr = this.toVector(queryEmbedding);
+
+      let result;
+      let searchMethod = '';
+      
+      // Step 1: Try vector_top_k search on QA pairs
+      try {
+        const vectorTopKStartTime = Date.now();
+        console.time('vector_top_k_search');
+        
+        result = await this.db.execute(
+          `
+          SELECT
+            qa.id,
+            qa.question,
+            qa.answer,
+            qa.document_id,
+            vector_extract(qa.vector) as vector_json,
+            vector_distance_cos(qa.vector, vector32(?)) as distance
+          FROM vector_top_k('medical_qa_vector_idx', vector32(?), ${limit}) vtk
+          JOIN medical_qa qa ON qa.rowid = vtk.id
+        `,
+          [queryVectorStr, queryVectorStr]
+        );
+        
+        console.timeEnd('vector_top_k_search');
+        const vectorTopKDuration = Date.now() - vectorTopKStartTime;
+        
+        if (!result.rows || result.rows.length === 0) {
+          throw new Error("vector_top_k returned 0 results");
+        }
+        
+        searchMethod = 'vector_top_k';
+        console.log(`✅ vector_top_k search successful in ${vectorTopKDuration}ms, found ${result.rows?.length || 0} QA results`);
+      } catch (vectorIndexError) {
+        console.warn(`⚠️ vector_top_k failed, falling back to vector_distance_cos:`, vectorIndexError);
+        
+        // Step 2: Fallback to vector_distance_cos
+        const cosineStartTime = Date.now();
+        console.time('cosine_similarity_search');
+        
+        result = await this.db.execute(
+          `
+          SELECT
+            qa.id,
+            qa.question,
+            qa.answer,
+            qa.document_id,
+            vector_extract(qa.vector) as vector_json,
+            vector_distance_cos(qa.vector, vector32(?)) as distance
+          FROM medical_qa qa
+          ORDER BY vector_distance_cos(qa.vector, vector32(?)) ASC
+          LIMIT ${limit}
+        `,
+          [queryVectorStr, queryVectorStr]
+        );
+        
+        console.timeEnd('cosine_similarity_search');
+        const cosineDuration = Date.now() - cosineStartTime;
+        searchMethod = 'cosine_similarity';
+        
+        console.log(`📋 vector_distance_cos fallback completed in ${cosineDuration}ms, found ${result.rows?.length || 0} QA results`);
+      }
+
+      // Process QA results
+      const qaResults: QASearchResult[] = [];
+      const documentIds = new Set<string>();
+
+      if (result.rows) {
+        for (const row of result.rows) {
+          const distance = row.distance || 2;
+          const similarity = 1 - distance;
+          
+          if (similarity >= threshold) {
+            try {
+              const qa: MedicalQA = {
+                id: row.id,
+                question: row.question,
+                answer: row.answer,
+                vector: row.vector_json ? JSON.parse(row.vector_json) : [],
+                document_id: row.document_id,
+              };
+
+              qaResults.push({ qa, similarity });
+              documentIds.add(row.document_id);
+            } catch (parseError) {
+              console.warn(`Error parsing QA result for ${row.id}:`, parseError);
+            }
+          }
+        }
+      }
+
+      // Step 3: Get documents by document_id from found QA pairs
+      const documents: DocumentSearchResult[] = [];
+      if (documentIds.size > 0) {
+        const documentIdArray = Array.from(documentIds);
+        const retrievedDocuments = await this.getDocumentsByIds(documentIdArray);
+        
+        // Create document search results with similarity based on best QA match
+        for (const doc of retrievedDocuments) {
+          const bestQAMatch = qaResults
+            .filter(qa => qa.qa.document_id === doc.id)
+            .reduce((best, current) => 
+              current.similarity > best.similarity ? current : best
+            );
+          
+          documents.push({
+            document: doc,
+            similarity: bestQAMatch.similarity
+          });
+        }
+      }
+
+      const totalSearchDuration = Date.now() - totalSearchStartTime;
+      console.log(`🎯 Unified search completed in ${totalSearchDuration}ms using ${searchMethod}: ${qaResults.length} QA results, ${documents.length} documents`);
+      return { qaResults, documents };
+    } catch (error) {
+      console.error("Error in unified vector search:", error);
+      throw new Error(
+        `Unified vector search failed: ${
+          error instanceof Error ? error.message : String(error)
+        }`
+      );
+    }
+  }
+
   // ===== MEDICAL Q&A METHODS =====
 
   /**
@@ -866,6 +720,7 @@ export class TursoDBService {
 
   /**
    * Searches for medical Q&A pairs similar to the provided query
+   * Uses the unified vector search function
    *
    * @param options - Search options including query text, result limit, and similarity threshold
    * @returns Array of search results with medical Q&A pairs and similarity scores
@@ -874,229 +729,13 @@ export class TursoDBService {
   async searchMedicalQA(
     options: MedicalSearchOptions
   ): Promise<QASearchResult[]> {
-    if (!this.isInitialized || !this.db) {
-      throw new Error("Database not initialized");
-    }
-
-    if (!options.query) {
-      throw new Error("Search query is required");
-    }
-
+    const limit = options.limit || DEFAULT_SEARCH_LIMIT;
+    const threshold = options.threshold || DEFAULT_SIMILARITY_THRESHOLD;
+    
     try {
-      const limit = options.limit || DEFAULT_SEARCH_LIMIT;
-      const threshold = options.threshold || DEFAULT_SIMILARITY_THRESHOLD;
-
-      console.log(
-        `Generating embedding for medical Q&A query: "${options.query}"`
-      );
-      const queryEmbedding = await this.generateEmbedding(options.query);
-      const queryVectorStr = this.toVector(queryEmbedding);
-      
-      // Debug: Check query embedding properties
-      const queryMagnitude = Math.sqrt(
-        queryEmbedding.reduce((sum, val) => sum + val * val, 0)
-      );
-      console.log(`Query embedding magnitude: ${queryMagnitude.toFixed(4)}`);
-        console.log(`Query embedding dimensions: ${queryEmbedding.length}`);
-        console.log(`Query embedding sample values: [${queryEmbedding.slice(0, 5).map(v => v.toFixed(4)).join(', ')}...]`);
-        
-        // Check if embedding looks reasonable
-        const nonZeroValues = queryEmbedding.filter(v => Math.abs(v) > 0.001).length;
-        const maxValue = Math.max(...queryEmbedding.map(Math.abs));
-        const avgValue = queryEmbedding.reduce((sum, v) => sum + Math.abs(v), 0) / queryEmbedding.length;
-        console.log(`🔍 Embedding quality check:`);
-        console.log(`  - Non-zero values: ${nonZeroValues}/${queryEmbedding.length} (${(nonZeroValues/queryEmbedding.length*100).toFixed(1)}%)`);
-        console.log(`  - Max absolute value: ${maxValue.toFixed(4)}`);
-        console.log(`  - Average absolute value: ${avgValue.toFixed(4)}`);
-        
-        if (nonZeroValues < queryEmbedding.length * 0.1) {
-          console.warn(`⚠️  Embedding seems sparse - only ${(nonZeroValues/queryEmbedding.length*100).toFixed(1)}% non-zero values`);
-        }
-        if (maxValue < 0.01) {
-          console.warn(`⚠️  Embedding values seem very small - max value: ${maxValue.toFixed(4)}`);
-        }
-
-      // Debug: Check Q&A database state
-      const qaCountResult = await this.db.execute(
-        "SELECT COUNT(*) as count FROM medical_qa"
-      );
-      const qaCount = qaCountResult.rows?.[0]?.count || 0;
-      console.log(`Total Q&A pairs in database: ${qaCount}`);
-      
-      if (qaCount > 0) {
-        console.log(`\n=== Q&A DATABASE STATE DEBUG ===`);
-        
-        // Check a few sample Q&A pairs
-        const sampleQA = await this.db.execute(
-          "SELECT id, question, vector_extract(vector) as vector_json FROM medical_qa LIMIT 3"
-        );
-        
-        if (sampleQA.rows) {
-          console.log(`Sample Q&A pairs in database:`);
-          for (const qa of sampleQA.rows) {
-            const vectorData = qa.vector_json ? JSON.parse(qa.vector_json) : null;
-            const questionPreview = qa.question.substring(0, 50).replace(/\n/g, ' ');
-            console.log(`- ID: ${qa.id}, Question: "${questionPreview}...", Vector dims: ${vectorData ? vectorData.length : 'null'}`);
-          }
-        }
-        
-        // Test if Q&A vector index is accessible
-        try {
-          const qaIndexTest = await this.db.execute(
-            `SELECT COUNT(*) as count FROM vector_top_k('medical_qa_vector_idx', vector32(?), 1)`,
-            [queryVectorStr]
-          );
-          console.log(`Q&A vector index test result: ${qaIndexTest.rows?.[0]?.count || 0} results`);
-        } catch (indexError) {
-          console.error(`Q&A vector index error:`, indexError);
-        }
-        
-        // Test alternative Q&A vector search approaches
-        console.log(`\n--- Testing Alternative Q&A Vector Search Methods ---`);
-        
-        // Test 1: Direct Q&A vector distance calculation
-        try {
-          const qaDirectTest = await this.db.execute(
-            `SELECT COUNT(*) as count FROM medical_qa WHERE vector_distance_cos(vector, vector32(?)) < 2.0 LIMIT 5`,
-            [queryVectorStr]
-          );
-          console.log(`Direct Q&A vector distance test: ${qaDirectTest.rows?.[0]?.count || 0} results`);
-        } catch (qaDirectError) {
-          console.error(`Direct Q&A vector distance error:`, qaDirectError);
-        }
-        
-        // Test 2: Try Q&A search without vector index
-        try {
-          const qaAltTest = await this.db.execute(
-            `SELECT id, question, vector_distance_cos(vector, vector32(?)) as distance FROM medical_qa ORDER BY distance LIMIT 3`,
-            [queryVectorStr]
-          );
-          console.log(`Alternative Q&A search test: ${qaAltTest.rows?.length || 0} results`);
-          if (qaAltTest.rows && qaAltTest.rows.length > 0) {
-            const qaDistances = qaAltTest.rows.map(r => r.distance);
-            const qaSimilarities = qaDistances.map(d => 1 - d);
-            console.log(`Sample Q&A distances: ${qaDistances.map(d => d?.toFixed(4)).join(', ')}`);
-            console.log(`Sample Q&A similarities: ${qaSimilarities.map(s => s?.toFixed(4)).join(', ')}`);
-            console.log(`💡 Suggested Q&A threshold: ${Math.max(0.05, Math.min(...qaSimilarities) - 0.05).toFixed(2)} (current: ${threshold})`);
-          }
-        } catch (qaAltError) {
-          console.error(`Alternative Q&A search error:`, qaAltError);
-        }
-        
-        console.log(`=== END Q&A DATABASE STATE DEBUG ===\n`);
-      } else {
-        console.log(`⚠️  No Q&A pairs found in database - this explains the 0 Q&A results!`);
-      }
-
-      let result;
-      try {
-        result = await this.db.execute(
-          `
-          SELECT
-            qa.id,
-            qa.question,
-            qa.answer,
-            qa.document_id,
-            vector_extract(qa.vector) as vector_json,
-            vector_distance_cos(qa.vector, vector32(?)) as distance
-          FROM vector_top_k('medical_qa_vector_idx', vector32(?), ${limit}) vtk
-          JOIN medical_qa qa ON qa.rowid = vtk.id
-        `,
-          [queryVectorStr, queryVectorStr]
-        );
-        
-        // Check if Q&A vector_top_k actually returned results
-         if (!result.rows || result.rows.length === 0) {
-           throw new Error("Q&A vector_top_k returned 0 results - likely index issue");
-         }
-         console.log(`✅ Q&A vector_top_k search successful, found ${result.rows?.length || 0} results`);
-       } catch (vectorIndexError) {
-         console.warn(`⚠️  Q&A vector_top_k failed or returned 0 results, falling back to direct vector search:`, vectorIndexError);
-        
-        // Fallback: Use direct vector distance calculation for Q&A
-        result = await this.db.execute(
-          `
-          SELECT
-            qa.id,
-            qa.question,
-            qa.answer,
-            qa.document_id,
-            vector_extract(qa.vector) as vector_json,
-            vector_distance_cos(qa.vector, vector32(?)) as distance
-          FROM medical_qa qa
-          ORDER BY vector_distance_cos(qa.vector, vector32(?)) ASC
-          LIMIT ${limit}
-        `,
-          [queryVectorStr, queryVectorStr]
-        );
-        
-        console.log(`📋 Q&A fallback search found ${result.rows?.length || 0} results`);
-      }
-
-      const searchResults: QASearchResult[] = [];
-
-      if (result.rows) {
-        console.log(`\n=== Q&A SIMILARITY SEARCH DEBUG ===`);
-        console.log(`Query: "${options.query}"`);
-        console.log(`Found ${result.rows.length} raw Q&A results from database`);
-        console.log(`Similarity threshold: ${threshold}`);
-        console.log(`\n--- All Q&A Results (sorted by distance) ---`);
-        
-        // Sort results by distance for better debugging
-        const sortedRows = [...result.rows].sort((a, b) => (a.distance || 2) - (b.distance || 2));
-        
-        for (let i = 0; i < sortedRows.length; i++) {
-          const row = sortedRows[i];
-          const distance = row.distance || 2;
-          // For normalized embeddings: similarity = 1 - distance
-          const similarity = 1 - distance;
-          const passesThreshold = similarity >= threshold;
-          
-          console.log(
-            `${i + 1}. [${passesThreshold ? 'PASS' : 'FAIL'}] Distance: ${distance.toFixed(4)} | Similarity: ${similarity.toFixed(4)} | ID: ${row.id}`
-          );
-          
-          // Show question and answer preview for top 3 results
-          if (i < 3) {
-            const questionPreview = row.question.substring(0, 80).replace(/\n/g, ' ');
-            const answerPreview = row.answer.substring(0, 80).replace(/\n/g, ' ');
-            console.log(`   Q: "${questionPreview}${row.question.length > 80 ? '...' : ''}"`);
-            console.log(`   A: "${answerPreview}${row.answer.length > 80 ? '...' : ''}"`);
-          }
-
-          if (similarity >= threshold) {
-            try {
-              const qa: MedicalQA = {
-                id: row.id,
-                question: row.question,
-                answer: row.answer,
-                vector: row.vector_json ? JSON.parse(row.vector_json) : [],
-                document_id: row.document_id,
-              };
-
-              searchResults.push({
-                qa,
-                similarity,
-              });
-            } catch (parseError) {
-              console.warn(
-                `Error parsing medical Q&A result for ${row.id}:`,
-                parseError
-              );
-            }
-          }
-        }
-        
-        console.log(`\n--- Summary ---`);
-        console.log(`Results above threshold (${threshold}): ${searchResults.length}`);
-        console.log(`Results below threshold: ${result.rows.length - searchResults.length}`);
-        console.log(`=== END Q&A SEARCH DEBUG ===\n`);
-      }
-
-      console.log(
-        `Found ${searchResults.length} similar medical Q&A pairs for query: "${options.query}"`
-      );
-      return searchResults;
+      const { qaResults } = await this.unifiedVectorSearch(options.query, limit, threshold);
+      console.log(`Found ${qaResults.length} similar medical Q&A pairs for query: "${options.query}"`);
+      return qaResults;
     } catch (error) {
       console.error("Error searching medical Q&A:", error);
       throw new Error(

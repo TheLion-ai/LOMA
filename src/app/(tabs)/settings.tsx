@@ -1,9 +1,10 @@
 import React, { useState } from "react";
-import { View, Text, ScrollView, Alert, Switch } from "react-native";
+import { View, Text, ScrollView, Alert, Switch, TextInput } from "react-native";
 import { useDatabase } from "@/lib/database-context";
 import { DatabaseDownloadService } from "@/lib/database-download-service";
 import { Button } from "@/components/ui/button";
 import { useTheme } from "@/lib/theme-context";
+import { useSettings } from "@/lib/settings-context";
 import { getCurrentTheme, theme } from "@/lib/theme";
 
 export default function SettingsScreen() {
@@ -23,8 +24,37 @@ export default function SettingsScreen() {
   } = useDatabase();
 
   const { isDark, toggleTheme } = useTheme();
+  const {
+    maxRagResults,
+    maxEmbeddingResults,
+    setMaxRagResults,
+    setMaxEmbeddingResults,
+    resetToDefaults,
+    isLoading: settingsLoading,
+  } = useSettings();
   const colors = getCurrentTheme(isDark);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [ragInput, setRagInput] = useState(maxRagResults.toString());
+  const [embeddingInput, setEmbeddingInput] = useState(maxEmbeddingResults.toString());
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+
+  // Update local state when settings change
+  React.useEffect(() => {
+    setRagInput(maxRagResults.toString());
+    setEmbeddingInput(maxEmbeddingResults.toString());
+    setHasUnsavedChanges(false);
+  }, [maxRagResults, maxEmbeddingResults]);
+
+  // Check for unsaved changes
+  React.useEffect(() => {
+    const ragValue = parseInt(ragInput, 10);
+    const embeddingValue = parseInt(embeddingInput, 10);
+    const hasChanges = 
+      (!isNaN(ragValue) && ragValue !== maxRagResults) ||
+      (!isNaN(embeddingValue) && embeddingValue !== maxEmbeddingResults);
+    setHasUnsavedChanges(hasChanges);
+  }, [ragInput, embeddingInput, maxRagResults, maxEmbeddingResults]);
 
   // Create dynamic styles based on current theme
   const dynamicStyles = {
@@ -203,6 +233,51 @@ export default function SettingsScreen() {
       color: colors.foreground,
       fontWeight: "500" as const,
     },
+    inputGroup: {
+      marginBottom: 16,
+    },
+    inputLabel: {
+      fontSize: 14,
+      fontWeight: "600" as const,
+      color: colors.foreground,
+      marginBottom: 8,
+    },
+    inputDescription: {
+      fontSize: 12,
+      color: colors.mutedForeground,
+      marginBottom: 8,
+    },
+    textInput: {
+      borderWidth: 1,
+      borderColor: colors.border,
+      borderRadius: 8,
+      padding: 12,
+      fontSize: 16,
+      backgroundColor: colors.card,
+      color: colors.foreground,
+    },
+    settingsButtonGroup: {
+      flexDirection: "row" as const,
+      gap: 12,
+      marginTop: 16,
+    },
+    settingsButton: {
+      flex: 1,
+      backgroundColor: colors.primary,
+      padding: 12,
+      borderRadius: 8,
+      alignItems: "center" as const,
+    },
+    settingsButtonDisabled: {
+      backgroundColor: colors.muted,
+    },
+    resetButton: {
+      flex: 1,
+      backgroundColor: colors.destructive,
+      padding: 12,
+      borderRadius: 8,
+      alignItems: "center" as const,
+    },
   };
 
   const handleRefreshStatus = async () => {
@@ -214,6 +289,80 @@ export default function SettingsScreen() {
     } finally {
       setIsRefreshing(false);
     }
+  };
+
+  const validateInput = (value: string): { isValid: boolean; error?: string } => {
+    const numValue = parseInt(value, 10);
+    if (isNaN(numValue)) {
+      return { isValid: false, error: 'Please enter a valid number' };
+    }
+    if (numValue < 1) {
+      return { isValid: false, error: 'Value must be at least 1' };
+    }
+    if (numValue > 20) {
+      return { isValid: false, error: 'Value must be 20 or less' };
+    }
+    return { isValid: true };
+  };
+
+  const handleSaveSettings = async () => {
+    const ragValidation = validateInput(ragInput);
+    const embeddingValidation = validateInput(embeddingInput);
+
+    if (!ragValidation.isValid) {
+      Alert.alert('Invalid RAG Results', ragValidation.error!);
+      return;
+    }
+
+    if (!embeddingValidation.isValid) {
+      Alert.alert('Invalid Embedding Results', embeddingValidation.error!);
+      return;
+    }
+
+    setIsSaving(true);
+    try {
+      const ragValue = parseInt(ragInput, 10);
+      const embeddingValue = parseInt(embeddingInput, 10);
+
+      await Promise.all([
+        setMaxRagResults(ragValue),
+        setMaxEmbeddingResults(embeddingValue),
+      ]);
+
+      Alert.alert('Success', 'Settings saved successfully!');
+    } catch (error) {
+      Alert.alert(
+        'Error',
+        error instanceof Error ? error.message : 'Failed to save settings'
+      );
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleResetSettings = () => {
+    Alert.alert(
+      'Reset Settings',
+      'Are you sure you want to reset search result settings to their default values?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Reset',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await resetToDefaults();
+              Alert.alert('Success', 'Settings reset to defaults!');
+            } catch (error) {
+              Alert.alert(
+                'Error',
+                error instanceof Error ? error.message : 'Failed to reset settings'
+              );
+            }
+          },
+        },
+      ]
+    );
   };
 
   // Helper function to get dynamic button text based on download state
@@ -298,6 +447,69 @@ export default function SettingsScreen() {
               trackColor={{ false: colors.muted, true: colors.primary }}
               thumbColor={isDark ? colors.primaryForeground : colors.foreground}
             />
+          </View>
+        </View>
+
+        {/* Search Results Configuration Section */}
+        <View style={dynamicStyles.section}>
+          <Text style={dynamicStyles.sectionTitle}>Search Results</Text>
+          <Text style={dynamicStyles.aboutText}>
+            Configure the maximum number of search results for different features.
+          </Text>
+
+          <View style={dynamicStyles.inputGroup}>
+            <Text style={dynamicStyles.inputLabel}>RAG Search Results</Text>
+            <Text style={dynamicStyles.inputDescription}>
+              Maximum results for chat-based searches (1-20)
+            </Text>
+            <TextInput
+              style={dynamicStyles.textInput}
+              value={ragInput}
+              onChangeText={setRagInput}
+              placeholder="5"
+              keyboardType="numeric"
+              maxLength={2}
+              editable={!settingsLoading}
+            />
+          </View>
+
+          <View style={dynamicStyles.inputGroup}>
+            <Text style={dynamicStyles.inputLabel}>Embedding Demo Results</Text>
+            <Text style={dynamicStyles.inputDescription}>
+              Maximum results for embedding demo searches (1-20)
+            </Text>
+            <TextInput
+              style={dynamicStyles.textInput}
+              value={embeddingInput}
+              onChangeText={setEmbeddingInput}
+              placeholder="5"
+              keyboardType="numeric"
+              maxLength={2}
+              editable={!settingsLoading}
+            />
+          </View>
+
+          <View style={dynamicStyles.settingsButtonGroup}>
+            <Button
+              onPress={handleSaveSettings}
+              disabled={!hasUnsavedChanges || isSaving || settingsLoading}
+              style={[
+                dynamicStyles.settingsButton,
+                (!hasUnsavedChanges || isSaving || settingsLoading) && dynamicStyles.settingsButtonDisabled,
+              ]}
+            >
+              <Text style={dynamicStyles.buttonText}>
+                {isSaving ? 'Saving...' : 'Save Settings'}
+              </Text>
+            </Button>
+
+            <Button
+              onPress={handleResetSettings}
+              disabled={settingsLoading}
+              style={dynamicStyles.resetButton}
+            >
+              <Text style={dynamicStyles.buttonText}>Reset to Defaults</Text>
+            </Button>
           </View>
         </View>
 
