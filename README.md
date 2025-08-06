@@ -1,16 +1,18 @@
-# Gemma 3n Chat App
+# LOMA - Local Offline Medical Assistant
 
-A React Native chat application powered by Gemma 3n language model with dual AI backends for optimal performance across platforms.
+A React Native medical AI assistant powered by Gemma 3n with RAG (Retrieval-Augmented Generation) capabilities for accurate medical information retrieval. LOMA runs entirely offline on iOS and Android devices, providing privacy-focused medical assistance with a comprehensive medical knowledge database.
 
 ## Features
 
-- **Dual AI Backends**: 
-  - **Web**: Transformers.js with Node.js server for browser compatibility
-  - **Native**: llama.rn for on-device inference on iOS/Android
-- **Local AI Chat**: Chat with Gemma 3n AI model running locally
-- **Automatic Model Management**: Handles model downloading and initialization
-- **Modern UI**: Clean and intuitive chat interface built with shadcn/ui components
-- **Cross-Platform**: Works on iOS, Android, and Web with platform-optimized AI backends
+- **🏥 Medical Knowledge Base**: Pre-loaded database with 500k+ medical Q&A pairs and documents
+- **🔍 RAG System**: Retrieval-Augmented Generation for contextually accurate medical responses
+- **📱 Mobile-First**: Optimized for iOS and Android with on-device AI inference
+- **🔒 Privacy-Focused**: Completely offline operation - no data leaves your device
+- **🧠 Advanced AI**: Gemma 3n language model with medical context injection
+- **⚡ Vector Search**: Semantic search using ALL_MINILM_L6_V2 embeddings for relevant medical information
+- **💾 Local Database**: SQLite database with vector similarity search capabilities
+- **🎯 Specialized Search**: Filter by medical specialty, publication year, and relevance
+- **📚 Source Citations**: Automatic citation of medical sources in AI responses
 
 ## Getting Started
 
@@ -18,8 +20,9 @@ A React Native chat application powered by Gemma 3n language model with dual AI 
 
 - Node.js (v16 or later)
 - Expo CLI
-- iOS Simulator (for iOS development)
-- Android Studio (for Android development)
+- iOS Simulator (for iOS development) or physical iOS device
+- Android Studio (for Android development) or physical Android device
+- **Note**: Web platform is not supported - LOMA is designed for mobile devices only
 
 ### Installation
 
@@ -29,94 +32,128 @@ A React Native chat application powered by Gemma 3n language model with dual AI 
    npm install
    ```
 
-### Running on Web (Transformers.js Backend)
+### Running LOMA
 
-For web deployment, you need to run both the Expo dev server and the Gemma 3n Node.js server:
+LOMA is designed exclusively for iOS and Android devices with on-device AI inference:
 
-1. **Start the Gemma 3n server** (in one terminal):
-   ```bash
-   node gemma-server.js
-   ```
-   This will:
-   - Download the ONNX model files (~2.5GB) on first run
-   - Initialize the Gemma 3n model with Transformers.js
-   - Start the server on `http://localhost:3002`
-
-2. **Start the Expo development server** (in another terminal):
+1. **Start the development server**:
    ```bash
    npm start
    ```
 
-3. **Open in browser**:
-   - Press `w` for web browser
-   - The app will connect to the local Gemma server automatically
+2. **Choose your platform**:
+   - Press `i` for iOS simulator or device
+   - Press `a` for Android emulator or device
 
-### Running on Native (llama.rn Backend)
+3. **First Launch Setup** (automatic):
+   - **Medical Database**: Downloads medical database (~500MB) containing 500k+ medical Q&A pairs
+   - **AI Model**: Downloads Gemma 3n model (~4.79GB) for on-device inference
+   - **Embedding Model**: Initializes ALL_MINILM_L6_V2 for vector search
+   - **Database Indexing**: Sets up vector search capabilities
 
-For iOS and Android, the app uses llama.rn for on-device inference:
-
-1. Start the development server:
-   ```bash
-   npm start
-   ```
-
-2. Choose your platform:
-   - Press `i` for iOS simulator
-   - Press `a` for Android emulator
-
-3. On first launch, the app will:
-   - Download the GGUF model (~4.79GB) automatically
-   - Initialize the AI model on-device
-   - Present you with a chat interface
+4. **Ready to Use**:
+   - Ask medical questions and receive AI responses with cited sources
+   - Browse medical database with semantic search
+   - All processing happens locally on your device
 
 ## Technology Stack
 
-- **React Native**: Cross-platform mobile development
+### Core Framework
+- **React Native**: Cross-platform mobile development (iOS/Android only)
 - **Expo**: Development platform and tools
-- **AI Backends**:
-  - **Web**: Transformers.js + Node.js server with ONNX Runtime
-  - **Native**: llama.rn (React Native binding for llama.cpp)
-- **Gemma 3n**: Google's lightweight language model
-- **shadcn/ui**: Modern UI components
 - **TypeScript**: Type-safe development
 
-## Model Information
+### AI & Machine Learning
+- **llama.rn**: React Native binding for llama.cpp (on-device inference)
+- **react-native-executorch**: ExecuTorch integration for embedding models
+- **Gemma 3n**: Google's lightweight language model optimized for mobile
+- **ALL_MINILM_L6_V2**: Sentence transformer for text embeddings
 
-This app uses different model formats optimized for each platform:
+### Database & Search
+- **@op-engineering/op-sqlite**: High-performance SQLite with vector extensions
+- **libSQL**: Vector database capabilities with cosine similarity search
+- **Vector Indexing**: Optimized vector search with 384-dimensional embeddings
 
-### Web Backend (Transformers.js)
-- **Model**: onnx-community/gemma-3n-E2B-it-ONNX
-- **Format**: ONNX with quantized weights
-- **Size**: ~2.5GB total
-- **Components**:
-  - `embed_tokens_q8.onnx`
-  - `vision_encoder_fp16.onnx` 
-  - `decoder_model_merged_q4.onnx`
-  - `audio_encoder_q8.onnx`
-- **Source**: Hugging Face ONNX Community
+### RAG Architecture
+- **Vector Search**: Semantic similarity search through medical knowledge base
+- **Context Injection**: Dynamic context enhancement for AI responses
+- **Source Citation**: Automatic medical source referencing
+- **Query Enhancement**: Medical query understanding and expansion
 
-### Native Backend (llama.rn)
+### UI & UX
+- **shadcn/ui**: Modern UI components
+- **Lucide React**: Icon system
+- **React Native Reanimated**: Smooth animations
+- **Moti**: Animation library
+
+## Medical AI Models & Database
+
+LOMA uses specialized models optimized for medical assistance on mobile devices:
+
+### Language Model (Gemma 3n)
 - **Model**: gemma-3n-E2B-it-Q8_0.gguf
 - **Format**: GGUF (GPT-Generated Unified Format)
 - **Size**: ~4.79GB
-- **Quantization**: Q8_0 (8-bit quantization)
+- **Quantization**: Q8_0 (8-bit quantization for mobile optimization)
+- **Purpose**: Medical question answering with context injection
 - **Source**: Hugging Face (ggml-org/gemma-3n-E2B-it-GGUF)
 
-## Performance Notes
+### Embedding Model (ALL_MINILM_L6_V2)
+- **Model**: ALL_MINILM_L6_V2 via ExecuTorch
+- **Dimensions**: 384-dimensional vectors
+- **Purpose**: Semantic search and similarity matching
+- **Integration**: react-native-executorch for on-device inference
+- **Performance**: Optimized for mobile vector generation
 
-### Web Performance
-- Runs in browser using WebAssembly and WebGL acceleration
-- Model loads in ~30-60 seconds on first run
-- Response generation: 10-30 seconds depending on browser and hardware
-- Requires stable internet connection for initial model download
 
-### Native Performance
-- Runs entirely on-device for maximum privacy
-- Initial model loading: 30-60 seconds
-- Response generation: 5-15 seconds depending on device capabilities
-- GPU acceleration available on supported devices
-- No internet required after initial setup
 
-## License
+### Privacy & Security
+- **100% Offline**: All AI processing happens locally on your device
+- **No Data Transmission**: Medical queries and responses never leave your device
+- **Local Storage**: Medical database and models stored securely on device
+- **HIPAA-Friendly**: No cloud dependencies or data sharing
+- **Secure by Design**: No user data collection or analytics
 
-This project is licensed under the MIT License.
+### System Requirements
+- **iOS**: iOS 13.0+ with at least 6GB storage space
+- **Android**: Android 8.0+ (API level 26) with at least 6GB storage space
+- **RAM**: Minimum 6GB recommended for optimal performance
+- **Storage**: 20GB free space for models and medical database
+
+## How LOMA's RAG System Works
+
+LOMA uses a sophisticated Retrieval-Augmented Generation (RAG) system to provide accurate medical information:
+
+### 1. Query Processing
+- User asks a medical question
+- Question is converted to a 384-dimensional vector using ALL_MINILM_L6_V2
+- Vector search finds semantically similar medical content
+
+### 2. Knowledge Retrieval
+- Searches through 500k+ medical Q&A pairs using cosine similarity
+- Retrieves relevant medical documents and their associated Q&A
+- Filters results by similarity threshold and relevance
+
+### 3. Context Enhancement
+- Selected medical content is formatted into context
+- Context is injected into the AI prompt with proper citations
+- Gemma 3n generates response using retrieved medical knowledge
+
+### 4. Response Generation
+- AI provides medically-informed answers with source citations
+- Sources are automatically linked for verification
+- Responses include relevant medical specialty and publication information
+
+## Medical Disclaimer
+
+⚠️ **IMPORTANT MEDICAL DISCLAIMER**
+
+LOMA is designed as an educational and informational tool only. It is **NOT** intended to:
+- Replace professional medical advice, diagnosis, or treatment
+- Provide emergency medical assistance
+- Substitute for consultation with qualified healthcare providers
+
+**Always seek the advice of your physician or other qualified health provider** with any questions you may have regarding a medical condition. Never disregard professional medical advice or delay in seeking it because of something you have read in LOMA.
+
+If you think you may have a medical emergency, call your doctor or emergency services immediately.
+
