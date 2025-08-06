@@ -3,6 +3,7 @@
     "scheme": "acme",
     "userInterfaceStyle": "automatic",
     "orientation": "default",
+    "icon": "./assets/icon.png",
     "web": {
       "output": "server",
       "favicon": "./assets/favicon.png"
@@ -10,10 +11,20 @@
     "plugins": [
       ["expo-router", { "origin": "http://localhost:8085" }]
     ],
-    "name": "loma",
+    "name": "LOMA",
     "slug": "loma",
+    "version": "1.0.0",
+    "platforms": ["ios", "android", "web"],
     "ios": {
-      "bundleIdentifier": "com.anonymous.loma"
+      "bundleIdentifier": "com.anonymous.loma",
+      "supportsTablet": true
+    },
+    "android": {
+      "package": "com.anonymous.loma",
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#f5f5f5"
+      }
     }
   }
 }
